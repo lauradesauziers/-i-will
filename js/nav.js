@@ -106,6 +106,11 @@ export async function renderNav(activeHref) {
     `
     : "";
 
+  if (coupleLabel) {
+    const suffix = document.title.split("—")[1];
+    document.title = suffix ? `Mariage ${coupleLabel} —${suffix}` : `Mariage ${coupleLabel}`;
+  }
+
   mount.innerHTML = `
     <div class="nav-brand">I Will</div>
     ${coupleLabel ? `<div class="nav-couple">${escapeHtml(coupleLabel)}</div>` : ""}

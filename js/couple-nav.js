@@ -21,6 +21,7 @@ export function renderCoupleTabs(activeHref) {
 }
 
 // Affiche le logo personnalisé du couple s'il existe, sinon "I Will" en texte.
+// Met aussi à jour le titre de l'onglet avec le nom du couple.
 // Appelle get_brief (déjà accessible à anon) — un aller-retour de plus,
 // négligeable, et évite de dupliquer cette logique dans chaque page.
 export async function renderCoupleLogo(supabase, token) {
@@ -32,5 +33,10 @@ export async function renderCoupleLogo(supabase, token) {
     mount.innerHTML = `<img src="${data.logo_url}" alt="${data.couple_nom || "I Will"}" style="height:64px; width:auto; display:block;" />`;
   } else {
     mount.innerHTML = `<p class="logo" style="margin:0;">I Will</p>`;
+  }
+
+  if (data?.couple_nom) {
+    const suffix = document.title.split("—")[1];
+    document.title = suffix ? `Mariage ${data.couple_nom} —${suffix}` : `Mariage ${data.couple_nom}`;
   }
 }
