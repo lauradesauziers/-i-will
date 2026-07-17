@@ -14,20 +14,19 @@
   <main class="app-main" id="app-main">
     <div id="page-topbar"></div>
     <p class="page-eyebrow">Échanges</p>
-    <h1>Ce que vous notez ensemble</h1>
-    <p class="page-desc">Vos notes et celles du couple, horodatées.</p>
+    <h1>Le fil avec le couple</h1>
+    <p class="page-desc">Une seule conversation, pas dix mails perdus.</p>
 
-    <div class="card">
-      <div class="field">
-        <label for="new-message">Nouvelle note</label>
-        <textarea id="new-message" placeholder="Écrire une note sur ce couple..."></textarea>
+    <div class="chat-thread" id="messages-list" style="margin-bottom:20px;"></div>
+
+    <div class="card" style="margin:0;">
+      <div class="field" style="margin-bottom:10px;">
+        <textarea id="new-message" placeholder="Écrire un message..." style="min-height:60px;"></textarea>
       </div>
       <div class="actions" style="text-align:left; margin-top:0;">
         <button class="btn-primary" id="send-btn">Envoyer</button>
       </div>
     </div>
-
-    <div id="messages-list" style="margin-top:24px;"></div>
   </main>
 </div>
 <div class="page" id="no-couple" style="display:none;">
@@ -62,7 +61,7 @@
       .from("messages")
       .select("*")
       .eq("brief_id", coupleId)
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: true });
 
     if (error) {
       listEl.innerHTML = `<p class="status error">${escapeHtml(error.message)}</p>`;
@@ -74,15 +73,19 @@
       return;
     }
 
-    listEl.innerHTML = messages.map((m) => `
-      <div class="response-card">
-        <div class="top">
-          <span class="names">${m.auteur === "couple" ? "Le couple" : "Laura"}</span>
-          <span class="date">${fmtDate(m.created_at)}</span>
+    listEl.innerHTML = messages.map((m) => {
+      const mine = m.auteur === "laura";
+      return `
+        <div class="chat-row ${mine ? "mine" : ""}">
+          <span class="avatar ${mine ? "avatar-gold" : "avatar-blue"}" style="flex-shrink:0;">${mine ? "L" : "C"}</span>
+          <div class="chat-bubble">
+            <div class="chat-name">${mine ? "Laura" : "Le couple"}</div>
+            <div class="chat-content">${escapeHtml(m.contenu)}</div>
+            <div class="chat-time">${fmtDate(m.created_at)}</div>
+          </div>
         </div>
-        <p style="margin:0; white-space:pre-wrap;">${escapeHtml(m.contenu)}</p>
-      </div>
-    `).join("");
+      `;
+    }).join("");
   }
 
   async function init() {

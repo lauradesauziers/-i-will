@@ -21,9 +21,10 @@
 
 <div class="page" id="brief-screen" style="display:none;">
   <div class="brief-header">
-    <p class="logo" style="margin:0;">I Will</p>
+    <div id="couple-logo"><p class="logo" style="margin:0;">I Will</p></div>
     <span class="save-status" id="save-status"></span>
   </div>
+  <nav class="couple-tabs" id="couple-tabs"></nav>
   <p class="intro">
     Ce brief est le vôtre : modifiez-le à tout moment, tout est enregistré
     automatiquement et partagé avec votre wedding planner en temps réel.
@@ -146,6 +147,7 @@
 <script src="js/config.js"></script>
 <script type="module">
   import { supabase } from "./js/supabase-client.js";
+  import { renderCoupleTabs, renderCoupleLogo } from "./js/couple-nav.js";
 
   const invalidScreen = document.getElementById("invalid-screen");
   const briefScreen = document.getElementById("brief-screen");
@@ -224,6 +226,8 @@
     fillForm(data);
     briefScreen.style.display = "block";
     form.addEventListener("input", scheduleSave);
+    renderCoupleTabs("brief.html");
+    renderCoupleLogo(supabase, token);
   }
 
   init();

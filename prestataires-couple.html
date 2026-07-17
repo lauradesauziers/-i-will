@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>I Will — Prestataires</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+<div class="page" id="invalid-screen" style="display:none;">
+  <div class="brand">
+    <p class="logo">I Will</p>
+  </div>
+  <div class="invalid-panel">
+    <h2>Lien invalide</h2>
+    <p>Ce lien ne correspond à aucun brief. Vérifiez que vous avez bien copié l'adresse complète, ou contactez votre wedding planner.</p>
+  </div>
+</div>
+
+<div class="page" id="vendors-screen" style="display:none;">
+  <div class="brief-header">
+    <div id="couple-logo"><p class="logo" style="margin:0;">I Will</p></div>
+  </div>
+  <nav class="couple-tabs" id="couple-tabs"></nav>
+
+  <h2 style="margin-top:0;">Vos prestataires validés</h2>
+  <p class="readonly-note">Ceux encore en discussion n'apparaissent pas ici — juste ce qui est confirmé.</p>
+
+  <div id="vendors-list" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:16px;"></div>
+</div>
+
+<script src="js/config.js"></script>
+<script type="module">
+  import { supabase } from "./js/supabase-client.js";
+  import { renderCoupleTabs, renderCoupleLogo, coupleTokenFromUrl } from "./js/couple-nav.js";
+
+  const invalidScreen = document.getElementById("invalid-screen");
+  const vendorsScreen = document.getElementById("vendors-screen");
+  const listEl = document.getElementById("vendors-list");
+
+  function escapeHtml(str) {
+    const div = document.createElement("div");
+    div.textContent = str == null ? "" : String(str);
+    return div.innerHTML;
+  }
+
+  function render(vendors) {
+    if (vendors.length === 0) {
+      listEl.innerHTML = `<p class="empty">Aucun prestataire validé pour le moment.</p>`;
+      return;
+    }
+    listEl.innerHTML = vendors.map((v) => `
+      <div class="kanban-card">
+        ${v.categorie ? `<div class="vendor-eyebrow">${escapeHtml(v.categorie)}</div>` : ""}
+        <div class="vendor-nom">${escapeHtml(v.nom)}</div>
+        <div class="vendor-meta">
+          <span>${escapeHtml(v.notes || "")}</span>
+          ${v.prix ? `<span>${escapeHtml(v.prix)}</span>` : ""}
+        </div>
+      </div>
+    `).join("");
+  }
+
+  async function init() {
+    const token = coupleTokenFromUrl();
+    if (!token || !supabase) {
+      invalidScreen.style.display = "block";
+      return;
+    }
+    const { data, error } = await supabase.rpc("get_couple_vendors", { p_token: token });
+    if (error) {
+      invalidScreen.style.display = "block";
+      return;
+    }
+    vendorsScreen.style.display = "block";
+    renderCoupleTabs("prestataires-couple.html");
+    renderCoupleLogo(supabase, token);
+    render(data || []);
+  }
+
+  init();
+</script>
+</body>
+</html>

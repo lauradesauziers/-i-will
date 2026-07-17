@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>I Will — Plan de table</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+<div class="page" id="invalid-screen" style="display:none;">
+  <div class="brand">
+    <p class="logo">I Will</p>
+  </div>
+  <div class="invalid-panel">
+    <h2>Lien invalide</h2>
+    <p>Ce lien ne correspond à aucun brief. Vérifiez que vous avez bien copié l'adresse complète, ou contactez votre wedding planner.</p>
+  </div>
+</div>
+
+<div class="page" id="plan-screen" style="display:none;">
+  <div class="brief-header">
+    <div id="couple-logo"><p class="logo" style="margin:0;">I Will</p></div>
+  </div>
+  <nav class="couple-tabs" id="couple-tabs"></nav>
+
+  <h2 style="margin-top:0;">Simulateur de plan de table</h2>
+  <p class="readonly-note">Glissez les invités vers une table — visible par votre wedding planner en temps réel.</p>
+
+  <div style="margin-bottom:16px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+    <input type="text" id="new-table-nom" placeholder="Nom de la table (ex. Table 1)" style="padding:9px 12px; border:1px solid var(--border); border-radius:8px; font-size:14px; flex:1; min-width:160px;" />
+    <input type="number" id="new-table-capacite" placeholder="Capacité" value="8" style="width:90px; flex-shrink:0; padding:9px 12px; border:1px solid var(--border); border-radius:8px; font-size:14px;" />
+    <button class="btn-primary" id="add-table-btn" style="flex-shrink:0; white-space:nowrap;">+ Ajouter une table</button>
+  </div>
+
+  <div class="pool-box" data-table="unassigned">
+    <p class="pool-label" id="pool-label">À placer</p>
+    <div id="pool-list"></div>
+  </div>
+
+  <div class="kanban tables-kanban" id="kanban"></div>
+</div>
+
+<script src="js/config.js"></script>
+<script type="module">
+  import { supabase } from "./js/supabase-client.js";
+  import { renderCoupleTabs, renderCoupleLogo, coupleTokenFromUrl } from "./js/couple-nav.js";
+
+  const invalidScreen = document.getElementById("invalid-screen");
+  const planScreen = document.getElementById("plan-screen");
+  const kanbanEl = document.getElementById("kanban");
+  const poolEl = document.getElementById("pool-list");
+  const poolBox = document.querySelector(".pool-box");
+  let token = null;
+
+  function escapeHtml(str) {
+    const div = document.createElement("div");
+    div.textContent = str == null ? "" : String(str);
+    return div.innerHTML;
+  }
+
+  async function loadBoard() {
+    const [{ data: tables, error: tErr }, { data: guests, error: gErr }] = await Promise.all([
+      supabase.rpc("get_couple_tables", { p_token: token }),
+      supabase.rpc("get_couple_guests", { p_token: token }),
+    ]);
+
+    if (tErr || gErr) {
+      kanbanEl.innerHTML = `<p class="status error">${escapeHtml((tErr || gErr).message)}</p>`;
+      return;
+    }
+
+    renderBoard(tables || [], guests || []);
+  }
+
+  function poolRow(g) {
+    return `
+      <div class="pool-row" draggable="true" data-id="${g.id}">
+        <span class="avatar avatar-blue">${escapeHtml((g.nom || "?")[0])}</span>
+        <span>${escapeHtml(g.nom)}</span>
+      </div>
+    `;
+  }
+
+  function guestRow(g) {
+    return `
+      <div class="guest-row" draggable="true" data-id="${g.id}">
+        <span class="avatar avatar-blue" style="width:22px; height:22px; font-size:10px;">${escapeHtml((g.nom || "?")[0])}</span>
+        <span>${escapeHtml(g.nom)}</span>
+        <button class="remove-guest" data-id="${g.id}" title="Retirer">✕</button>
+      </div>
+    `;
+  }
+
+  function renderBoard(tables, guests) {
+    const unassigned = guests.filter((g) => !g.table_id);
+    document.getElementById("pool-label").textContent = `À placer · ${unassigned.length}`;
+    poolEl.innerHTML = unassigned.length
+      ? unassigned.map(poolRow).join("")
+      : `<p class="empty" style="padding:20px 0;">Tous les invités sont placés.</p>`;
+
+    kanbanEl.innerHTML = tables.map((t) => {
+      const assigned = guests.filter((g) => g.table_id === t.id);
+      const over = assigned.length > t.capacite;
+      return `
+        <div class="kanban-col" data-table="${t.id}">
+          <h3 style="text-transform:none; font-size:14px; color:var(--ink); font-weight:600;">${escapeHtml(t.nom)}<span class="col-count">${assigned.length}/${t.capacite}</span></h3>
+          ${over ? `<div class="table-capacity over">Trop d'invités pour cette table</div>` : ""}
+          ${assigned.map(guestRow).join("") || `<p class="empty" style="padding:10px 0; font-size:13px;">Déposez des invités ici...</p>`}
+        </div>
+      `;
+    }).join("") + (tables.length === 0 ? `<p class="empty">Ajoutez une table pour commencer.</p>` : "");
+
+    attachDragHandlers();
+  }
+
+  function attachDragHandlers() {
+    const cards = [...poolEl.querySelectorAll(".pool-row"), ...kanbanEl.querySelectorAll(".guest-row")];
+    cards.forEach((card) => {
+      card.addEventListener("dragstart", (e) => {
+        e.dataTransfer.setData("text/plain", card.dataset.id);
+        card.classList.add("dragging");
+      });
+      card.addEventListener("dragend", () => card.classList.remove("dragging"));
+    });
+
+    kanbanEl.querySelectorAll(".remove-guest").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        await supabase.rpc("assign_couple_guest_table", { p_token: token, p_guest_id: btn.dataset.id, p_table_id: null });
+        loadBoard();
+      });
+    });
+
+    const dropTargets = [poolBox, ...kanbanEl.querySelectorAll(".kanban-col")];
+    dropTargets.forEach((col) => {
+      col.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        col.classList.add("drop-target");
+      });
+      col.addEventListener("dragleave", () => col.classList.remove("drop-target"));
+      col.addEventListener("drop", async (e) => {
+        e.preventDefault();
+        col.classList.remove("drop-target");
+        const guestId = e.dataTransfer.getData("text/plain");
+        const tableKey = col.dataset.table;
+        const table_id = tableKey === "unassigned" ? null : tableKey;
+        await supabase.rpc("assign_couple_guest_table", { p_token: token, p_guest_id: guestId, p_table_id: table_id });
+        loadBoard();
+      });
+    });
+  }
+
+  async function init() {
+    token = coupleTokenFromUrl();
+    if (!token || !supabase) {
+      invalidScreen.style.display = "block";
+      return;
+    }
+    const { data, error } = await supabase.rpc("get_brief", { p_token: token });
+    if (error || !data || !data.id) {
+      invalidScreen.style.display = "block";
+      return;
+    }
+
+    planScreen.style.display = "block";
+    renderCoupleTabs("plan-de-table-couple.html");
+    renderCoupleLogo(supabase, token);
+    await loadBoard();
+
+    document.getElementById("add-table-btn").addEventListener("click", async () => {
+      const nom = document.getElementById("new-table-nom").value.trim() || "Nouvelle table";
+      const capacite = Number(document.getElementById("new-table-capacite").value) || 8;
+      await supabase.rpc("add_couple_table", { p_token: token, p_nom: nom, p_capacite: capacite });
+      document.getElementById("new-table-nom").value = "";
+      loadBoard();
+    });
+  }
+
+  init();
+</script>
+</body>
+</html>

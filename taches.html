@@ -14,27 +14,20 @@
   <main class="app-main" id="app-main">
     <div id="page-topbar"></div>
     <p class="page-eyebrow">Tâches</p>
-    <h1>Ce qu'il reste à faire</h1>
-    <p class="page-desc">Assignez chaque tâche à vous ou au couple, avec une échéance.</p>
+    <h1>À faire — qui fait quoi</h1>
+    <p class="page-desc">Chaque tâche est assignée à vous ou au couple. Cochez au fur et à mesure.</p>
 
     <div style="margin-bottom:16px;">
       <button class="btn-primary" id="add-task-btn">+ Ajouter une tâche</button>
     </div>
 
-    <div class="table-scroll">
-      <table class="table-simple">
-        <thead>
-          <tr>
-            <th style="width:36px;"></th>
-            <th>Titre</th>
-            <th>Assigné à</th>
-            <th>Échéance</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody id="task-rows"></tbody>
-      </table>
+    <div class="filter-pills" id="filter-pills">
+      <button class="filter-pill active" data-filter="all">Tout le monde</button>
+      <button class="filter-pill" data-filter="couple">Couple</button>
+      <button class="filter-pill" data-filter="laura">Laura</button>
     </div>
+
+    <div class="task-list" id="task-list"></div>
   </main>
 </div>
 <div class="page" id="no-couple" style="display:none;">
@@ -51,8 +44,11 @@
 
   const appShell = document.getElementById("app-shell");
   const noCouple = document.getElementById("no-couple");
-  const rowsEl = document.getElementById("task-rows");
+  const listEl = document.getElementById("task-list");
   let coupleId = null;
+  let allTasks = [];
+  let openTaskId = null;
+  let currentFilter = "all";
 
   function escapeHtml(str) {
     const div = document.createElement("div");
@@ -60,8 +56,13 @@
     return div.innerHTML;
   }
 
+  function avatar(assignee) {
+    if (assignee === "couple") return `<span class="avatar avatar-blue" style="width:24px;height:24px;font-size:11px;">C</span>`;
+    return `<span class="avatar avatar-gold" style="width:24px;height:24px;font-size:11px;">L</span>`;
+  }
+
   async function loadTasks() {
-    const { data: tasks, error } = await supabase
+    const { data, error } = await supabase
       .from("tasks")
       .select("*")
       .eq("brief_id", coupleId)
@@ -69,61 +70,98 @@
       .order("due_date", { ascending: true, nullsFirst: false });
 
     if (error) {
-      rowsEl.innerHTML = `<tr><td colspan="5" class="status error">${escapeHtml(error.message)}</td></tr>`;
+      listEl.innerHTML = `<p class="status error" style="padding:16px;">${escapeHtml(error.message)}</p>`;
       return;
     }
-    renderRows(tasks || []);
+    allTasks = data || [];
+    render();
   }
 
-  function renderRows(tasks) {
+  function render() {
+    const tasks = currentFilter === "all" ? allTasks : allTasks.filter((t) => t.assignee === currentFilter);
     if (tasks.length === 0) {
-      rowsEl.innerHTML = `<tr><td colspan="5" class="empty">Aucune tâche. Ajoutez-en une.</td></tr>`;
+      listEl.innerHTML = `<p class="empty" style="padding:24px;">Aucune tâche. Ajoutez-en une.</p>`;
       return;
     }
-    rowsEl.innerHTML = tasks.map((t) => `
-      <tr data-id="${t.id}" style="${t.done ? "opacity:0.5;" : ""}">
-        <td><input type="checkbox" data-field="done" ${t.done ? "checked" : ""} /></td>
-        <td><input type="text" value="${escapeHtml(t.titre || "")}" data-field="titre" /></td>
-        <td>
+    const firstUpcomingId = tasks.find((t) => !t.done && t.due_date)?.id;
+    listEl.innerHTML = tasks.map((t) => taskRow(t, t.id === firstUpcomingId)).join("");
+    attachHandlers();
+  }
+
+  function taskRow(t, isUrgent) {
+    if (t.id === openTaskId) {
+      return `
+        <div class="task-edit-form" data-id="${t.id}">
+          <input type="text" data-field="titre" value="${escapeHtml(t.titre || "")}" placeholder="Titre" />
+          <input type="text" data-field="description" value="${escapeHtml(t.description || "")}" placeholder="Note (ex. Après la dégustation · Prestataires)" />
           <select data-field="assignee">
             <option value="laura" ${t.assignee === "laura" ? "selected" : ""}>Laura</option>
             <option value="couple" ${t.assignee === "couple" ? "selected" : ""}>Couple</option>
           </select>
-        </td>
-        <td><input type="date" value="${t.due_date || ""}" data-field="due_date" /></td>
-        <td><button class="btn-secondary delete-row" data-id="${t.id}">✕</button></td>
-      </tr>
-    `).join("");
+          <input type="date" data-field="due_date" value="${t.due_date || ""}" />
+          <div class="edit-actions">
+            <button class="edit-delete" data-id="${t.id}">Supprimer</button>
+            <button class="edit-close" data-id="${t.id}">Fermer</button>
+          </div>
+        </div>
+      `;
+    }
+    return `
+      <div class="task-row ${t.done ? "done" : ""}" data-id="${t.id}">
+        <input type="checkbox" data-field="done" ${t.done ? "checked" : ""} />
+        <div class="task-main" data-open="${t.id}">
+          <div class="task-titre">${escapeHtml(t.titre)}</div>
+          ${t.description ? `<div class="task-desc">${escapeHtml(t.description)}</div>` : ""}
+        </div>
+        ${avatar(t.assignee)}
+        ${t.due_date ? `<span class="task-date ${isUrgent ? "urgent" : ""}">${new Date(t.due_date).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}</span>` : ""}
+      </div>
+    `;
   }
 
   let saveTimers = {};
 
   function attachHandlers() {
-    rowsEl.addEventListener("change", (e) => {
-      const row = e.target.closest("tr");
-      if (!row) return;
-      const id = row.dataset.id;
-      const field = e.target.dataset.field;
-      if (!id || !field) return;
-
-      clearTimeout(saveTimers[id]);
-      saveTimers[id] = setTimeout(async () => {
-        const payload = {};
-        row.querySelectorAll("[data-field]").forEach((el) => {
-          const f = el.dataset.field;
-          if (el.type === "checkbox") payload[f] = el.checked;
-          else payload[f] = el.value || null;
-        });
-        await supabase.from("tasks").update(payload).eq("id", id);
-        if (field === "done") loadTasks();
-      }, field === "done" ? 0 : 500);
+    listEl.querySelectorAll('[data-field="done"]').forEach((cb) => {
+      cb.addEventListener("change", async () => {
+        const id = cb.closest(".task-row").dataset.id;
+        await supabase.from("tasks").update({ done: cb.checked }).eq("id", id);
+        loadTasks();
+      });
     });
 
-    rowsEl.addEventListener("click", async (e) => {
-      if (!e.target.classList.contains("delete-row")) return;
-      await supabase.from("tasks").delete().eq("id", e.target.dataset.id);
-      loadTasks();
+    listEl.querySelectorAll("[data-open]").forEach((el) => {
+      el.addEventListener("click", () => {
+        openTaskId = el.dataset.open;
+        render();
+      });
     });
+
+    const form = listEl.querySelector(".task-edit-form");
+    if (form) {
+      const id = form.dataset.id;
+      form.addEventListener("input", () => {
+        clearTimeout(saveTimers[id]);
+        saveTimers[id] = setTimeout(async () => {
+          const payload = {};
+          form.querySelectorAll("[data-field]").forEach((el) => {
+            payload[el.dataset.field] = el.value || null;
+          });
+          await supabase.from("tasks").update(payload).eq("id", id);
+          const t = allTasks.find((x) => x.id === id);
+          if (t) Object.assign(t, payload);
+        }, 500);
+      });
+      form.querySelector(".edit-close").addEventListener("click", () => {
+        openTaskId = null;
+        loadTasks();
+      });
+      form.querySelector(".edit-delete").addEventListener("click", async () => {
+        await supabase.from("tasks").delete().eq("id", id);
+        openTaskId = null;
+        loadTasks();
+      });
+    }
   }
 
   async function init() {
@@ -140,11 +178,23 @@
     await renderNav("taches.html");
 
     await loadTasks();
-    attachHandlers();
 
     document.getElementById("add-task-btn").addEventListener("click", async () => {
-      await supabase.from("tasks").insert({ brief_id: coupleId, titre: "Nouvelle tâche", assignee: "laura" });
+      const { data } = await supabase
+        .from("tasks")
+        .insert({ brief_id: coupleId, titre: "Nouvelle tâche", assignee: "laura" })
+        .select()
+        .single();
+      openTaskId = data.id;
       loadTasks();
+    });
+
+    document.getElementById("filter-pills").addEventListener("click", (e) => {
+      const btn = e.target.closest(".filter-pill");
+      if (!btn) return;
+      currentFilter = btn.dataset.filter;
+      document.querySelectorAll(".filter-pill").forEach((p) => p.classList.toggle("active", p === btn));
+      render();
     });
   }
 

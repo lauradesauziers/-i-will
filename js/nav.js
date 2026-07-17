@@ -1,5 +1,15 @@
 import { supabase } from "./supabase-client.js";
 
+const storedTheme = localStorage.getItem("i-will-theme");
+if (storedTheme) document.documentElement.setAttribute("data-theme", storedTheme);
+
+function toggleTheme() {
+  const current = document.documentElement.getAttribute("data-theme");
+  const next = current === "dark" ? "light" : "dark";
+  document.documentElement.setAttribute("data-theme", next);
+  localStorage.setItem("i-will-theme", next);
+}
+
 const NAV_ITEMS = [
   { href: "dashboard.html", label: "Accueil", icon: "⌂" },
   { href: "budget.html", label: "Budget", icon: "€" },
@@ -101,6 +111,7 @@ export async function renderNav(activeHref) {
     ${coupleLabel ? `<div class="nav-couple">${escapeHtml(coupleLabel)}</div>` : ""}
     <nav class="nav-links">${items}${briefLink}</nav>
     ${footerPeople ? `<div class="nav-footer">${footerPeople}</div>` : ""}
+    <button class="theme-toggle" id="theme-toggle" type="button">◐ Thème</button>
     <a href="#" class="nav-logout" id="nav-logout">Se déconnecter</a>
   `;
 
@@ -109,6 +120,8 @@ export async function renderNav(activeHref) {
     await supabase.auth.signOut();
     location.href = "dashboard.html";
   });
+
+  document.getElementById("theme-toggle").addEventListener("click", toggleTheme);
 
   const topbar = document.getElementById("page-topbar");
   if (topbar && coupleId) {

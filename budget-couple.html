@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>I Will — Budget</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+<div class="page" id="invalid-screen" style="display:none;">
+  <div class="brand">
+    <p class="logo">I Will</p>
+  </div>
+  <div class="invalid-panel">
+    <h2>Lien invalide</h2>
+    <p>Ce lien ne correspond à aucun brief. Vérifiez que vous avez bien copié l'adresse complète, ou contactez votre wedding planner.</p>
+  </div>
+</div>
+
+<div class="page" id="budget-screen" style="display:none;">
+  <div class="brief-header">
+    <div id="couple-logo"><p class="logo" style="margin:0;">I Will</p></div>
+  </div>
+  <nav class="couple-tabs" id="couple-tabs"></nav>
+
+  <h2 style="margin-top:0;">Où en est le budget</h2>
+  <p class="readonly-note">Vue en lecture seule — c'est votre wedding planner qui tient ces chiffres à jour.</p>
+
+  <div class="budget-bar-wrap">
+    <div class="stat-row" style="margin-bottom:0;">
+      <div class="stat-card" style="border:none; padding:0;">
+        <div class="label">Enveloppe fixée</div>
+        <div class="value" id="total-prevu">0 €</div>
+      </div>
+      <div class="stat-card" style="border:none; padding:0;">
+        <div class="label">Déjà payé</div>
+        <div class="value" id="total-paye">0 €</div>
+      </div>
+      <div class="stat-card" style="border:none; padding:0;">
+        <div class="label">Engagé</div>
+        <div class="value" id="total-engage">0 €</div>
+      </div>
+    </div>
+    <div class="budget-bar" id="budget-bar">
+      <div class="seg-paye" id="seg-paye" style="width:0%"></div>
+      <div class="seg-engage" id="seg-engage" style="width:0%"></div>
+    </div>
+    <div class="budget-legend">
+      <span><span class="dot paye"></span>Payé</span>
+      <span><span class="dot engage"></span>Engagé, à régler</span>
+      <span><span class="dot dispo"></span>Disponible</span>
+    </div>
+  </div>
+
+  <div class="table-scroll">
+    <table class="table-simple">
+      <thead>
+        <tr>
+          <th>Poste</th>
+          <th>Statut</th>
+          <th>Prévu</th>
+          <th>Engagé</th>
+          <th>Payé</th>
+        </tr>
+      </thead>
+      <tbody id="budget-rows"></tbody>
+    </table>
+  </div>
+</div>
+
+<script src="js/config.js"></script>
+<script type="module">
+  import { supabase } from "./js/supabase-client.js";
+  import { renderCoupleTabs, renderCoupleLogo, coupleTokenFromUrl } from "./js/couple-nav.js";
+
+  const invalidScreen = document.getElementById("invalid-screen");
+  const budgetScreen = document.getElementById("budget-screen");
+  const rowsEl = document.getElementById("budget-rows");
+
+  function escapeHtml(str) {
+    const div = document.createElement("div");
+    div.textContent = str == null ? "" : String(str);
+    return div.innerHTML;
+  }
+
+  function fmt(n) {
+    return Number(n || 0).toLocaleString("fr-FR") + " €";
+  }
+
+  function statusBadge(item) {
+    const prevu = Number(item.montant_prevu || 0);
+    const engage = Number(item.montant_engage || 0);
+    const paye = Number(item.montant_paye || 0);
+    const reference = engage > 0 ? engage : prevu;
+    if (paye > 0 && reference > 0 && paye >= reference) return `<span class="status-badge success">Payé</span>`;
+    if (engage > 0 || paye > 0) return `<span class="status-badge warn">Engagé</span>`;
+    if (prevu > 0) return `<span class="status-badge neutral">À prévoir</span>`;
+    return `<span class="status-badge neutral">—</span>`;
+  }
+
+  function render(items) {
+    if (items.length === 0) {
+      rowsEl.innerHTML = `<tr><td colspan="5" class="empty">Aucun poste de budget pour le moment.</td></tr>`;
+      return;
+    }
+    rowsEl.innerHTML = items.map((item) => `
+      <tr>
+        <td>${escapeHtml(item.categorie || "")}</td>
+        <td>${statusBadge(item)}</td>
+        <td>${fmt(item.montant_prevu)}</td>
+        <td>${fmt(item.montant_engage)}</td>
+        <td>${fmt(item.montant_paye)}</td>
+      </tr>
+    `).join("");
+
+    const totals = items.reduce((acc, i) => ({
+      prevu: acc.prevu + Number(i.montant_prevu || 0),
+      engage: acc.engage + Number(i.montant_engage || 0),
+      paye: acc.paye + Number(i.montant_paye || 0),
+    }), { prevu: 0, engage: 0, paye: 0 });
+
+    document.getElementById("total-prevu").textContent = fmt(totals.prevu);
+    document.getElementById("total-engage").textContent = fmt(totals.engage);
+    document.getElementById("total-paye").textContent = fmt(totals.paye);
+
+    const base = totals.prevu > 0 ? totals.prevu : 1;
+    const payePct = Math.min(100, (totals.paye / base) * 100);
+    const engageRestPct = Math.min(100 - payePct, Math.max(0, ((totals.engage - totals.paye) / base) * 100));
+    document.getElementById("seg-paye").style.width = payePct + "%";
+    document.getElementById("seg-engage").style.width = engageRestPct + "%";
+  }
+
+  async function init() {
+    const token = coupleTokenFromUrl();
+    if (!token || !supabase) {
+      invalidScreen.style.display = "block";
+      return;
+    }
+    const { data, error } = await supabase.rpc("get_couple_budget", { p_token: token });
+    if (error) {
+      invalidScreen.style.display = "block";
+      return;
+    }
+    budgetScreen.style.display = "block";
+    renderCoupleTabs("budget-couple.html");
+    renderCoupleLogo(supabase, token);
+    render(data || []);
+  }
+
+  init();
+</script>
+</body>
+</html>
