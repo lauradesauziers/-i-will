@@ -29,7 +29,7 @@ export async function renderCoupleLogo(supabase, token) {
 
   const { data } = await supabase.rpc("get_brief", { p_token: token });
   if (data?.logo_url) {
-    mount.innerHTML = `<img src="${data.logo_url}" alt="${data.couple_nom || "I Will"}" style="height:36px; width:auto; display:block;" />`;
+    mount.innerHTML = `<img src="${data.logo_url}" alt="${data.couple_nom || "I Will"}" style="height:64px; width:auto; display:block;" />`;
   } else {
     mount.innerHTML = `<p class="logo" style="margin:0;">I Will</p>`;
   }
