@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>I Will — Espace planner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+<div class="page" id="login-screen" style="display:none;">
+  <div class="login-box">
+    <p class="logo" style="text-align:center;">I Will</p>
+    <p class="tagline" style="text-align:center; color:var(--muted); margin-bottom:24px;">Espace planner</p>
+    <form id="login-form">
+      <div class="field">
+        <label for="email">Email</label>
+        <input type="email" id="email" required />
+      </div>
+      <div class="field">
+        <label for="password">Mot de passe</label>
+        <input type="password" id="password" required />
+      </div>
+      <div class="actions">
+        <button type="submit" class="primary">Se connecter</button>
+        <div id="login-status" class="status error"></div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="app-shell" id="app-shell" style="display:none;">
+  <div id="app-nav"></div>
+  <main class="app-main" id="app-main">
+    <!-- rempli en JS selon présence de ?couple= -->
+  </main>
+</div>
+
+<script src="js/config.js"></script>
+<script type="module">
+  import { supabase } from "./js/supabase-client.js";
+  import { renderNav, coupleIdFromUrl } from "./js/nav.js";
+
+  const loginScreen = document.getElementById("login-screen");
+  const appShell = document.getElementById("app-shell");
+  const appMain = document.getElementById("app-main");
+  const loginForm = document.getElementById("login-form");
+  const loginStatus = document.getElementById("login-status");
+
+  function escapeHtml(str) {
+    const div = document.createElement("div");
+    div.textContent = str == null ? "" : String(str);
+    return div.innerHTML;
+  }
+
+  const involvementLabels = {
+    deleguer: "Je délègue, surprenez-moi",
+    grandes_lignes: "Je valide les grandes lignes",
+    regulier: "Je veux être consulté régulièrement",
+    tout_decider: "On décide tout ensemble",
+  };
+
+  function fieldRow(label, value) {
+    if (!value) return "";
+    return `<dt>${label}</dt><dd>${escapeHtml(value)}</dd>`;
+  }
+
+  async function renderCoupleList() {
+    const { data: briefs, error } = await supabase
+      .from("briefs")
+      .select("id, couple_nom, date_mariage, email")
+      .order("created_at", { ascending: false });
+
+    const { data: responses } = await supabase
+      .from("responses")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    let coupleListHtml = `<p class="empty">Aucun couple pour le moment.</p>`;
+    if (!error && briefs && briefs.length > 0) {
+      coupleListHtml = `<div class="couple-list">${briefs.map((b) => `
+        <a class="couple-row" href="dashboard.html?couple=${b.id}">
+          <span class="names">${escapeHtml(b.couple_nom || "Sans nom")}</span>
+          <span class="meta">${b.date_mariage ? new Date(b.date_mariage).toLocaleDateString("fr-FR") : "Date non fixée"}</span>
+        </a>
+      `).join("")}</div>`;
+    }
+
+    let responsesHtml = `<p class="empty">Aucune réponse pour le moment.</p>`;
+    if (responses && responses.length > 0) {
+      responsesHtml = responses.map((r) => `
+        <div class="response-card">
+          <div class="top">
+            <span class="names">${escapeHtml(r.couple_names || "—")}</span>
+            <span class="date">${new Date(r.created_at).toLocaleDateString("fr-FR")}</span>
+          </div>
+          <dl>
+            ${fieldRow("Email", r.contact_email)}
+            ${fieldRow("Téléphone", r.contact_phone)}
+            ${fieldRow("Date envisagée", r.wedding_date)}
+            ${fieldRow("Invités estimés", r.guest_count_estimate)}
+            ${fieldRow("Budget", r.budget_range)}
+            ${fieldRow("Implication", involvementLabels[r.involvement_level] || r.involvement_level)}
+            ${fieldRow("Vision", r.vision_style)}
+            ${fieldRow("Indispensables", r.must_haves)}
+            ${fieldRow("À éviter", r.must_avoid)}
+            ${fieldRow("Accompagnement souhaité", r.support_wanted)}
+            ${fieldRow("Notes", r.additional_notes)}
+          </dl>
+        </div>
+      `).join("");
+    }
+
+    appMain.innerHTML = `
+      <h1>Vos couples</h1>
+      <p class="subtitle">Chaque couple a son brief, son budget, ses prestataires et son plan de table.</p>
+      <div style="margin-bottom:20px;">
+        <button class="btn-primary" id="new-couple-btn">+ Nouveau couple</button>
+      </div>
+      <div id="new-couple-form" style="display:none; margin-bottom:24px;" class="card">
+        <div class="field">
+          <label for="new-couple-nom">Prénoms du couple</label>
+          <input type="text" id="new-couple-nom" placeholder="Cécile & Wilfried" />
+        </div>
+        <div class="actions" style="text-align:left; margin-top:0;">
+          <button class="btn-primary" id="new-couple-save">Créer</button>
+        </div>
+        <div id="new-couple-result" style="margin-top:14px; font-size:14px;"></div>
+      </div>
+      ${coupleListHtml}
+
+      <h2 style="color:var(--navy); font-size:20px; margin:40px 0 20px;">Réponses du questionnaire</h2>
+      ${responsesHtml}
+    `;
+
+    document.getElementById("new-couple-btn").addEventListener("click", () => {
+      document.getElementById("new-couple-form").style.display = "block";
+    });
+
+    document.getElementById("new-couple-save").addEventListener("click", async () => {
+      const nom = document.getElementById("new-couple-nom").value.trim();
+      const resultEl = document.getElementById("new-couple-result");
+      if (!nom) {
+        resultEl.textContent = "Mets un nom avant de créer.";
+        return;
+      }
+      const { data, error } = await supabase
+        .from("briefs")
+        .insert({ couple_nom: nom })
+        .select()
+        .single();
+      if (error) {
+        resultEl.textContent = "Erreur : " + error.message;
+        return;
+      }
+      const link = `${location.origin}${location.pathname.replace("dashboard.html", "brief.html")}?t=${data.share_token}`;
+      resultEl.innerHTML = `Créé. Lien à envoyer au couple :<br><code style="word-break:break-all;">${escapeHtml(link)}</code>`;
+      renderCoupleList();
+    });
+  }
+
+  async function renderCoupleOverview(coupleId) {
+    const { data: brief, error } = await supabase
+      .from("briefs")
+      .select("*")
+      .eq("id", coupleId)
+      .maybeSingle();
+
+    if (error || !brief) {
+      appMain.innerHTML = `<p class="status error">Couple introuvable.</p>`;
+      return;
+    }
+
+    const [{ data: budgetItems }, { data: tasks }] = await Promise.all([
+      supabase.from("budget_items").select("montant_prevu, montant_engage, montant_paye").eq("brief_id", coupleId),
+      supabase.from("tasks").select("titre, due_date, done").eq("brief_id", coupleId).order("due_date", { ascending: true }),
+    ]);
+
+    const totals = (budgetItems || []).reduce((acc, i) => ({
+      prevu: acc.prevu + Number(i.montant_prevu || 0),
+      engage: acc.engage + Number(i.montant_engage || 0),
+      paye: acc.paye + Number(i.montant_paye || 0),
+    }), { prevu: 0, engage: 0, paye: 0 });
+
+    const totalTasks = (tasks || []).length;
+    const doneTasks = (tasks || []).filter((t) => t.done).length;
+    const upcoming = (tasks || []).filter((t) => !t.done).slice(0, 5);
+
+    let countdown = "Date non fixée";
+    if (brief.date_mariage) {
+      const days = Math.ceil((new Date(brief.date_mariage) - new Date()) / 86400000);
+      countdown = days >= 0 ? `J-${days}` : "Passé";
+    }
+
+    const shareLink = `${location.origin}${location.pathname.replace("dashboard.html", "brief.html")}?t=${brief.share_token}`;
+
+    appMain.innerHTML = `
+      <h1>${escapeHtml(brief.couple_nom || "Couple")}</h1>
+      <p class="subtitle">${countdown}${brief.date_mariage ? " · " + new Date(brief.date_mariage).toLocaleDateString("fr-FR") : ""}</p>
+
+      <div class="card">
+        <h2 style="margin-top:0;">Contact</h2>
+        ${!brief.email && !brief.telephone && !brief.adresse ? '<p class="empty">Pas encore renseigné — le couple le remplit depuis son brief.</p>' : `
+          <dl style="margin:0; display:grid; grid-template-columns:100px 1fr; gap:8px 12px; font-size:14px;">
+            ${brief.email ? `<dt style="color:var(--muted);">Email</dt><dd style="margin:0;">${escapeHtml(brief.email)}</dd>` : ""}
+            ${brief.telephone ? `<dt style="color:var(--muted);">Téléphone</dt><dd style="margin:0;">${escapeHtml(brief.telephone)}</dd>` : ""}
+            ${brief.adresse ? `<dt style="color:var(--muted);">Adresse</dt><dd style="margin:0;">${escapeHtml(brief.adresse)}</dd>` : ""}
+          </dl>
+        `}
+      </div>
+
+      <div class="stat-row">
+        <div class="stat-card">
+          <div class="label">Budget engagé</div>
+          <div class="value">${totals.engage.toLocaleString("fr-FR")} €</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">Budget payé</div>
+          <div class="value">${totals.paye.toLocaleString("fr-FR")} €</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">Tâches</div>
+          <div class="value">${doneTasks}/${totalTasks}</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 style="margin-top:0;">Prochaines échéances</h2>
+        ${upcoming.length === 0 ? '<p class="empty">Aucune tâche à venir.</p>' : `
+          <ul style="margin:0; padding-left:18px;">
+            ${upcoming.map((t) => `<li>${escapeHtml(t.titre)}${t.due_date ? " — " + new Date(t.due_date).toLocaleDateString("fr-FR") : ""}</li>`).join("")}
+          </ul>
+        `}
+      </div>
+
+      <div class="card">
+        <h2 style="margin-top:0;">Lien du brief couple</h2>
+        <p style="font-size:14px; word-break:break-all;"><code>${escapeHtml(shareLink)}</code></p>
+        <a class="btn-secondary" href="${escapeHtml(shareLink)}" target="_blank" rel="noopener">Ouvrir le brief</a>
+      </div>
+    `;
+  }
+
+  async function renderApp() {
+    const coupleId = coupleIdFromUrl();
+    await renderNav("dashboard.html");
+    if (coupleId) {
+      await renderCoupleOverview(coupleId);
+    } else {
+      await renderCoupleList();
+    }
+  }
+
+  async function showDashIfLoggedIn() {
+    if (!supabase) return;
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) {
+      loginScreen.style.display = "none";
+      appShell.style.display = "flex";
+      renderApp();
+    } else {
+      loginScreen.style.display = "block";
+      appShell.style.display = "none";
+    }
+  }
+
+  loginForm?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    loginStatus.textContent = "";
+    if (!supabase) {
+      loginStatus.textContent = "Configuration manquante — voir le bandeau en haut de page.";
+      return;
+    }
+    const email = document.getElementById("email").value;
+    const password = document.getElementById("password").value;
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+      loginStatus.textContent = "Connexion impossible : " + error.message;
+      return;
+    }
+    showDashIfLoggedIn();
+  });
+
+  if (supabase) {
+    showDashIfLoggedIn();
+  } else {
+    loginScreen.style.display = "block";
+  }
+</script>
+</body>
+</html>

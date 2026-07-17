@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>I Will — Rétroplanning</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+<div class="app-shell" id="app-shell" style="display:none;">
+  <div id="app-nav"></div>
+  <main class="app-main" id="app-main">
+    <div id="page-topbar"></div>
+    <p class="page-eyebrow">Rétroplanning</p>
+    <h1>Le fil de votre organisation</h1>
+    <p class="page-desc">Le déroulé classique d'un mariage, réparti selon votre date. Cochez au fil de l'avancement.</p>
+    <div id="timeline"></div>
+  </main>
+</div>
+<div class="page" id="no-couple" style="display:none;">
+  <div class="invalid-panel">
+    <h2>Aucun couple sélectionné</h2>
+    <p><a href="dashboard.html">Retourner à l'accueil</a> pour choisir un couple.</p>
+  </div>
+</div>
+
+<script src="js/config.js"></script>
+<script type="module">
+  import { supabase } from "./js/supabase-client.js";
+  import { renderNav, coupleIdFromUrl, requireSession } from "./js/nav.js";
+
+  const appShell = document.getElementById("app-shell");
+  const noCouple = document.getElementById("no-couple");
+  const timelineEl = document.getElementById("timeline");
+  let coupleId = null;
+
+  function escapeHtml(str) {
+    const div = document.createElement("div");
+    div.textContent = str == null ? "" : String(str);
+    return div.innerHTML;
+  }
+
+  const MONTHS = ["janvier","février","mars","avril","mai","juin","juillet","août","septembre","octobre","novembre","décembre"];
+
+  const PHASES = [
+    { key: "12+", label: "Les fondations", range: "12+ MOIS", min: 365, max: Infinity },
+    { key: "9-12", label: "Les prestataires clés", range: "9–12 MOIS", min: 270, max: 365 },
+    { key: "6-9", label: "Le cœur de l'organisation", range: "6–9 MOIS", min: 180, max: 270 },
+    { key: "3-6", label: "Les détails", range: "3–6 MOIS", min: 90, max: 180 },
+    { key: "1-3", label: "La dernière ligne droite", range: "1–3 MOIS", min: 30, max: 90 },
+    { key: "0-1", label: "Le compte à rebours final", range: "DERNIER MOIS", min: 0, max: 30 },
+  ];
+
+  function phaseForDays(daysBefore) {
+    if (daysBefore < 0) return null;
+    return PHASES.find((p) => daysBefore >= p.min && daysBefore < p.max) || PHASES[PHASES.length - 1];
+  }
+
+  async function loadTimeline() {
+    const { data: brief } = await supabase.from("briefs").select("date_mariage").eq("id", coupleId).maybeSingle();
+    const weddingDate = brief?.date_mariage ? new Date(brief.date_mariage) : null;
+
+    const { data: tasks, error } = await supabase
+      .from("tasks")
+      .select("*")
+      .eq("brief_id", coupleId)
+      .order("due_date", { ascending: true, nullsFirst: false });
+
+    if (error) {
+      timelineEl.innerHTML = `<p class="status error">${escapeHtml(error.message)}</p>`;
+      return;
+    }
+
+    if (!tasks || tasks.length === 0) {
+      timelineEl.innerHTML = `<p class="empty">Aucune tâche à planifier. Ajoutez-en depuis "Tâches".</p>`;
+      return;
+    }
+
+    let html;
+    if (weddingDate) {
+      html = renderByPhase(tasks, weddingDate);
+    } else {
+      html = renderByMonth(tasks);
+    }
+
+    timelineEl.innerHTML = `<div class="phase-list">${html}</div>`;
+
+    timelineEl.querySelectorAll("[data-task-id]").forEach((cb) => {
+      cb.addEventListener("change", async () => {
+        await supabase.from("tasks").update({ done: cb.checked }).eq("id", cb.dataset.taskId);
+        loadTimeline();
+      });
+    });
+  }
+
+  function renderByPhase(tasks, weddingDate) {
+    const withDate = tasks.filter((t) => t.due_date);
+    const withoutDate = tasks.filter((t) => !t.due_date);
+
+    const buckets = {};
+    withDate.forEach((t) => {
+      const daysBefore = Math.round((weddingDate - new Date(t.due_date)) / 86400000);
+      const phase = phaseForDays(daysBefore) || PHASES[PHASES.length - 1];
+      (buckets[phase.key] = buckets[phase.key] || []).push(t);
+    });
+
+    let html = "";
+    for (const phase of PHASES) {
+      const items = buckets[phase.key];
+      if (!items || items.length === 0) continue;
+      html += phaseBlock(phase.label, phase.range, items);
+    }
+    if (withoutDate.length > 0) {
+      html += phaseBlock("Sans échéance", "", withoutDate);
+    }
+    return html;
+  }
+
+  function renderByMonth(tasks) {
+    const withDate = tasks.filter((t) => t.due_date);
+    const withoutDate = tasks.filter((t) => !t.due_date);
+    const groups = {};
+    withDate.forEach((t) => {
+      const d = new Date(t.due_date);
+      const key = `${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+      (groups[key] = groups[key] || []).push(t);
+    });
+    let html = "";
+    for (const [label, items] of Object.entries(groups)) {
+      const capitalized = label.charAt(0).toUpperCase() + label.slice(1);
+      html += phaseBlock(capitalized, "", items);
+    }
+    if (withoutDate.length > 0) {
+      html += phaseBlock("Sans échéance", "", withoutDate);
+    }
+    return html;
+  }
+
+  function phaseBlock(label, range, items) {
+    const doneCount = items.filter((t) => t.done).length;
+    let iconClass = "todo";
+    let iconContent = "";
+    if (doneCount === items.length) { iconClass = "done"; iconContent = "✓"; }
+    else if (doneCount > 0) { iconClass = "progress"; }
+
+    return `
+      <div class="phase">
+        <div class="phase-head">
+          <span class="phase-icon ${iconClass}">${iconContent}</span>
+          <span class="phase-title">${escapeHtml(label)}</span>
+          ${range ? `<span class="phase-range">${escapeHtml(range)}${doneCount > 0 && doneCount < items.length ? " · EN COURS" : ""}</span>` : ""}
+        </div>
+        <ul class="phase-items">
+          ${items.map((t) => taskLine(t)).join("")}
+        </ul>
+      </div>
+    `;
+  }
+
+  function taskLine(t) {
+    return `
+      <li class="${t.done ? "done" : ""}">
+        <input type="checkbox" data-task-id="${t.id}" ${t.done ? "checked" : ""} />
+        <span>${escapeHtml(t.titre)}</span>
+        <span class="item-assignee">${t.assignee === "couple" ? "Couple" : "Laura"}</span>
+      </li>
+    `;
+  }
+
+  async function init() {
+    const session = await requireSession();
+    if (!session) return;
+
+    coupleId = coupleIdFromUrl();
+    if (!coupleId) {
+      noCouple.style.display = "block";
+      return;
+    }
+
+    appShell.style.display = "flex";
+    await renderNav("retroplanning.html");
+    await loadTimeline();
+  }
+
+  init();
+</script>
+</body>
+</html>

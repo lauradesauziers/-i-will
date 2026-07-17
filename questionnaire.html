@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>I Will — Questionnaire mariage</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+<div class="page">
+  <div class="brand">
+    <p class="logo">I Will</p>
+    <p class="tagline">Questionnaire de préparation</p>
+  </div>
+  <p class="intro">
+    Ce questionnaire nous permet d'apprendre à vous connaître avant de commencer à construire votre mariage ensemble.
+    Prenez votre temps — il n'y a pas de mauvaise réponse, seulement la vôtre.
+  </p>
+
+  <form id="form">
+    <section class="card">
+      <h2>Vous</h2>
+      <p class="hint">Pour qu'on sache à qui on s'adresse.</p>
+      <div class="row">
+        <div class="field">
+          <label for="couple_names">Vos prénoms</label>
+          <input type="text" id="couple_names" name="couple_names" placeholder="Cécile & Wilfried" required />
+        </div>
+        <div class="field">
+          <label for="wedding_date">Date envisagée
+            <span class="sub">(laissez vide si pas encore fixée)</span>
+          </label>
+          <input type="date" id="wedding_date" name="wedding_date" />
+        </div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label for="contact_email">Email</label>
+          <input type="email" id="contact_email" name="contact_email" required />
+        </div>
+        <div class="field">
+          <label for="contact_phone">Téléphone</label>
+          <input type="tel" id="contact_phone" name="contact_phone" />
+        </div>
+      </div>
+      <div class="field">
+        <label for="guest_count_estimate">Nombre d'invités estimé</label>
+        <input type="text" id="guest_count_estimate" name="guest_count_estimate" placeholder="ex. entre 80 et 100" />
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Votre vision</h2>
+      <p class="hint">L'ambiance, le style, ce qui vous inspire.</p>
+      <div class="field">
+        <label for="vision_style">Comment imaginez-vous l'ambiance de votre journée ?</label>
+        <textarea id="vision_style" name="vision_style" placeholder="Champêtre, élégante, festive, intime..."></textarea>
+      </div>
+      <div class="field">
+        <label for="must_haves">Les 3 choses les plus importantes pour vous ce jour-là</label>
+        <textarea id="must_haves" name="must_haves"></textarea>
+      </div>
+      <div class="field">
+        <label for="must_avoid">Ce que vous ne voulez surtout pas</label>
+        <textarea id="must_avoid" name="must_avoid" placeholder="Un détail, une ambiance, une tradition..."></textarea>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Votre implication</h2>
+      <p class="hint">Il n'y a pas de bonne réponse — juste ce qui vous correspond.</p>
+      <div class="field">
+        <label>À quel point voulez-vous être impliqués dans les décisions ?</label>
+        <div class="scale">
+          <label><input type="radio" name="involvement_level" value="deleguer" /><span>Je délègue, surprenez-moi</span></label>
+          <label><input type="radio" name="involvement_level" value="grandes_lignes" /><span>Je valide les grandes lignes</span></label>
+          <label><input type="radio" name="involvement_level" value="regulier" /><span>Je veux être consulté régulièrement</span></label>
+          <label><input type="radio" name="involvement_level" value="tout_decider" /><span>On décide tout ensemble</span></label>
+        </div>
+      </div>
+      <div class="field">
+        <label for="support_wanted">Quel accompagnement recherchez-vous de la part de votre wedding planner ?</label>
+        <textarea id="support_wanted" name="support_wanted" placeholder="Coordination le jour J uniquement, accompagnement complet, aide sur certains postes..."></textarea>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Budget</h2>
+      <div class="field">
+        <label for="budget_range">Quelle fourchette de budget global envisagez-vous ?</label>
+        <input type="text" id="budget_range" name="budget_range" placeholder="ex. 25 000 – 35 000 €" />
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Pour finir</h2>
+      <div class="field">
+        <label for="additional_notes">Autre chose que vous aimeriez nous dire ?</label>
+        <textarea id="additional_notes" name="additional_notes"></textarea>
+      </div>
+    </section>
+
+    <div class="actions">
+      <button type="submit" class="primary" id="submit-btn">Envoyer mes réponses</button>
+      <div id="status" class="status"></div>
+    </div>
+  </form>
+
+  <div class="success-panel" id="success" style="display:none;">
+    <h2>Merci !</h2>
+    <p>Vos réponses ont bien été transmises. On revient vers vous très vite.</p>
+  </div>
+</div>
+
+<script src="js/config.js"></script>
+<script type="module">
+  import { supabase } from "./js/supabase-client.js";
+
+  const form = document.getElementById("form");
+  const statusEl = document.getElementById("status");
+  const submitBtn = document.getElementById("submit-btn");
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    statusEl.textContent = "";
+    statusEl.className = "status";
+
+    if (!supabase) {
+      statusEl.textContent = "Configuration manquante — voir le bandeau ci-dessus.";
+      statusEl.className = "status error";
+      return;
+    }
+
+    const data = Object.fromEntries(new FormData(form).entries());
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Envoi...";
+
+    const { error } = await supabase.from("responses").insert({
+      couple_names: data.couple_names,
+      wedding_date: data.wedding_date || null,
+      contact_email: data.contact_email,
+      contact_phone: data.contact_phone || null,
+      guest_count_estimate: data.guest_count_estimate || null,
+      vision_style: data.vision_style || null,
+      must_haves: data.must_haves || null,
+      must_avoid: data.must_avoid || null,
+      involvement_level: data.involvement_level || null,
+      support_wanted: data.support_wanted || null,
+      budget_range: data.budget_range || null,
+      additional_notes: data.additional_notes || null,
+    });
+
+    submitBtn.disabled = false;
+    submitBtn.textContent = "Envoyer mes réponses";
+
+    if (error) {
+      statusEl.textContent = "Une erreur est survenue : " + error.message;
+      statusEl.className = "status error";
+      return;
+    }
+
+    form.style.display = "none";
+    document.getElementById("success").style.display = "block";
+  });
+</script>
+</body>
+</html>

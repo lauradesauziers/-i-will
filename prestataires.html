@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>I Will — Prestataires</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+<div class="app-shell" id="app-shell" style="display:none;">
+  <div id="app-nav"></div>
+  <main class="app-main" id="app-main">
+    <div id="page-topbar"></div>
+    <p class="page-eyebrow">Prestataires</p>
+    <h1>Le tableau des prestataires</h1>
+    <p class="page-desc">Glissez une carte d'une colonne à l'autre au fil de vos échanges.</p>
+
+    <div style="margin-bottom:16px;">
+      <button class="btn-primary" id="add-vendor-btn">+ Ajouter un prestataire</button>
+    </div>
+
+    <div class="kanban" id="kanban"></div>
+  </main>
+</div>
+<div class="page" id="no-couple" style="display:none;">
+  <div class="invalid-panel">
+    <h2>Aucun couple sélectionné</h2>
+    <p><a href="dashboard.html">Retourner à l'accueil</a> pour choisir un couple.</p>
+  </div>
+</div>
+
+<script src="js/config.js"></script>
+<script type="module">
+  import { supabase } from "./js/supabase-client.js";
+  import { renderNav, coupleIdFromUrl, requireSession } from "./js/nav.js";
+
+  const appShell = document.getElementById("app-shell");
+  const noCouple = document.getElementById("no-couple");
+  const kanbanEl = document.getElementById("kanban");
+
+  const COLUMNS = [
+    { key: "a_contacter", label: "À contacter" },
+    { key: "devis", label: "Devis reçu" },
+    { key: "coup_de_coeur", label: "Coup de cœur" },
+    { key: "valide", label: "Validé / signé" },
+  ];
+
+  function escapeHtml(str) {
+    const div = document.createElement("div");
+    div.textContent = str == null ? "" : String(str);
+    return div.innerHTML;
+  }
+
+  let coupleId = null;
+  let openCardId = null;
+
+  async function loadVendors() {
+    const { data: vendors, error } = await supabase
+      .from("vendors")
+      .select("*")
+      .eq("brief_id", coupleId)
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      kanbanEl.innerHTML = `<p class="status error">${escapeHtml(error.message)}</p>`;
+      return;
+    }
+
+    renderKanban(vendors || []);
+  }
+
+  function vendorCard(v) {
+    if (v.id === openCardId) {
+      return `
+        <div class="kanban-card" data-id="${v.id}">
+          <div class="vendor-edit-form">
+            <input type="text" data-field="nom" value="${escapeHtml(v.nom || "")}" placeholder="Nom" />
+            <input type="text" data-field="categorie" value="${escapeHtml(v.categorie || "")}" placeholder="Catégorie (ex. Traiteur)" />
+            <input type="text" data-field="prix" value="${escapeHtml(v.prix || "")}" placeholder="Prix (ex. 9 200 €)" />
+            <input type="text" data-field="notes" value="${escapeHtml(v.notes || "")}" placeholder="Notes" />
+            <input type="email" data-field="contact_email" value="${escapeHtml(v.contact_email || "")}" placeholder="Email de contact" />
+            <input type="tel" data-field="contact_tel" value="${escapeHtml(v.contact_tel || "")}" placeholder="Téléphone" />
+            <div class="edit-actions">
+              <button class="edit-delete" data-id="${v.id}">Supprimer</button>
+              <button class="edit-close" data-id="${v.id}">Fermer</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+    return `
+      <div class="kanban-card" draggable="true" data-id="${v.id}">
+        ${v.categorie ? `<div class="vendor-eyebrow">${escapeHtml(v.categorie)}</div>` : ""}
+        <div class="vendor-nom">${escapeHtml(v.nom)}</div>
+        <div class="vendor-meta">
+          <span>${escapeHtml(v.notes || "")}</span>
+          ${v.prix ? `<span>${escapeHtml(v.prix)}</span>` : ""}
+        </div>
+      </div>
+    `;
+  }
+
+  function renderKanban(vendors) {
+    kanbanEl.innerHTML = COLUMNS.map((col) => {
+      const items = vendors.filter((v) => v.statut === col.key);
+      return `
+        <div class="kanban-col" data-status="${col.key}">
+          <h3>${col.label}<span class="col-count">${items.length}</span></h3>
+          ${items.map(vendorCard).join("")}
+        </div>
+      `;
+    }).join("");
+
+    attachDragHandlers();
+    attachEditHandlers();
+  }
+
+  function attachDragHandlers() {
+    kanbanEl.querySelectorAll(".kanban-card[draggable]").forEach((card) => {
+      card.addEventListener("dragstart", (e) => {
+        e.dataTransfer.setData("text/plain", card.dataset.id);
+        card.classList.add("dragging");
+      });
+      card.addEventListener("dragend", () => card.classList.remove("dragging"));
+      card.addEventListener("click", () => {
+        openCardId = card.dataset.id;
+        loadVendors();
+      });
+    });
+
+    kanbanEl.querySelectorAll(".kanban-col").forEach((col) => {
+      col.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        col.classList.add("drop-target");
+      });
+      col.addEventListener("dragleave", () => col.classList.remove("drop-target"));
+      col.addEventListener("drop", async (e) => {
+        e.preventDefault();
+        col.classList.remove("drop-target");
+        const id = e.dataTransfer.getData("text/plain");
+        const newStatus = col.dataset.status;
+        await supabase.from("vendors").update({ statut: newStatus, updated_at: new Date().toISOString() }).eq("id", id);
+        loadVendors();
+      });
+    });
+  }
+
+  let saveTimers = {};
+
+  function attachEditHandlers() {
+    const form = kanbanEl.querySelector(".vendor-edit-form");
+    if (!form) return;
+    const card = form.closest(".kanban-card");
+    const id = card.dataset.id;
+
+    form.addEventListener("input", () => {
+      clearTimeout(saveTimers[id]);
+      saveTimers[id] = setTimeout(async () => {
+        const payload = {};
+        form.querySelectorAll("[data-field]").forEach((el) => {
+          payload[el.dataset.field] = el.value || null;
+        });
+        await supabase.from("vendors").update({ ...payload, updated_at: new Date().toISOString() }).eq("id", id);
+      }, 500);
+    });
+
+    form.querySelector(".edit-close").addEventListener("click", () => {
+      openCardId = null;
+      loadVendors();
+    });
+
+    form.querySelector(".edit-delete").addEventListener("click", async () => {
+      await supabase.from("vendors").delete().eq("id", id);
+      openCardId = null;
+      loadVendors();
+    });
+  }
+
+  async function init() {
+    const session = await requireSession();
+    if (!session) return;
+
+    coupleId = coupleIdFromUrl();
+    if (!coupleId) {
+      noCouple.style.display = "block";
+      return;
+    }
+
+    appShell.style.display = "flex";
+    await renderNav("prestataires.html");
+
+    await loadVendors();
+
+    document.getElementById("add-vendor-btn").addEventListener("click", async () => {
+      const { data } = await supabase
+        .from("vendors")
+        .insert({ brief_id: coupleId, nom: "Nouveau prestataire", statut: "a_contacter" })
+        .select()
+        .single();
+      openCardId = data.id;
+      loadVendors();
+    });
+  }
+
+  init();
+</script>
+</body>
+</html>

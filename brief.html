@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>I Will — Votre brief</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+<div class="page" id="invalid-screen" style="display:none;">
+  <div class="brand">
+    <p class="logo">I Will</p>
+  </div>
+  <div class="invalid-panel">
+    <h2>Lien invalide</h2>
+    <p>Ce lien ne correspond à aucun brief. Vérifiez que vous avez bien copié l'adresse complète, ou contactez votre wedding planner.</p>
+  </div>
+</div>
+
+<div class="page" id="brief-screen" style="display:none;">
+  <div class="brief-header">
+    <p class="logo" style="margin:0;">I Will</p>
+    <span class="save-status" id="save-status"></span>
+  </div>
+  <p class="intro">
+    Ce brief est le vôtre : modifiez-le à tout moment, tout est enregistré
+    automatiquement et partagé avec votre wedding planner en temps réel.
+  </p>
+
+  <form id="form">
+    <section class="card">
+      <h2>Vous</h2>
+      <div class="row">
+        <div class="field">
+          <label for="couple_nom">Vos prénoms</label>
+          <input type="text" id="couple_nom" name="couple_nom" placeholder="Cécile & Wilfried" />
+        </div>
+        <div class="field">
+          <label for="date_mariage">Date du mariage</label>
+          <input type="date" id="date_mariage" name="date_mariage" />
+        </div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label for="email">Email</label>
+          <input type="email" id="email" name="email" />
+        </div>
+        <div class="field">
+          <label for="telephone">Téléphone</label>
+          <input type="tel" id="telephone" name="telephone" />
+        </div>
+      </div>
+      <div class="field">
+        <label for="adresse">Adresse</label>
+        <input type="text" id="adresse" name="adresse" />
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Infos pratiques</h2>
+      <div class="row">
+        <div class="field">
+          <label for="budget_estime">Budget estimé</label>
+          <input type="text" id="budget_estime" name="budget_estime" placeholder="ex. 25 000 – 35 000 €" />
+        </div>
+        <div class="field">
+          <label for="nb_invites">Nombre d'invités</label>
+          <input type="text" id="nb_invites" name="nb_invites" />
+        </div>
+      </div>
+      <div class="field">
+        <label for="lieu_souhaite">Lieu souhaité</label>
+        <input type="text" id="lieu_souhaite" name="lieu_souhaite" />
+      </div>
+      <div class="row">
+        <div class="field">
+          <label for="format">Format
+            <span class="sub">journée complète, soirée seule...</span>
+          </label>
+          <input type="text" id="format" name="format" />
+        </div>
+        <div class="field">
+          <label for="type_ceremonie">Type de cérémonie</label>
+          <input type="text" id="type_ceremonie" name="type_ceremonie" placeholder="civile, religieuse, laïque..." />
+        </div>
+      </div>
+      <div class="field">
+        <label for="invites_dorment">Les invités dorment-ils sur place ?</label>
+        <input type="text" id="invites_dorment" name="invites_dorment" />
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Le mariage</h2>
+      <div class="field">
+        <label for="deja_reserve">Ce qui est déjà réservé</label>
+        <textarea id="deja_reserve" name="deja_reserve"></textarea>
+      </div>
+      <div class="field">
+        <label for="accompagnement">Accompagnement souhaité</label>
+        <textarea id="accompagnement" name="accompagnement"></textarea>
+      </div>
+      <div class="field">
+        <label for="implication">Votre implication souhaitée</label>
+        <textarea id="implication" name="implication"></textarea>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Vos envies</h2>
+      <div class="field">
+        <label>Sur quoi voulez-vous de l'aide ?</label>
+        <div class="checklist" id="aide-list">
+          <label><input type="checkbox" name="aide" value="Traiteur" /><span>Traiteur</span></label>
+          <label><input type="checkbox" name="aide" value="Lieu" /><span>Lieu</span></label>
+          <label><input type="checkbox" name="aide" value="Décoration" /><span>Décoration</span></label>
+          <label><input type="checkbox" name="aide" value="Photographe / Vidéaste" /><span>Photographe / Vidéaste</span></label>
+          <label><input type="checkbox" name="aide" value="Musique / DJ" /><span>Musique / DJ</span></label>
+          <label><input type="checkbox" name="aide" value="Fleuriste" /><span>Fleuriste</span></label>
+          <label><input type="checkbox" name="aide" value="Papeterie" /><span>Papeterie</span></label>
+          <label><input type="checkbox" name="aide" value="Coordination jour J" /><span>Coordination jour J</span></label>
+        </div>
+      </div>
+      <div class="field">
+        <label for="envies">Vos envies, vos inspirations</label>
+        <textarea id="envies" name="envies"></textarea>
+      </div>
+      <div class="field">
+        <label for="non_souhaite">Ce que vous ne voulez surtout pas</label>
+        <textarea id="non_souhaite" name="non_souhaite"></textarea>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Notes</h2>
+      <div class="field">
+        <label for="notes">Notes complémentaires</label>
+        <textarea id="notes" name="notes"></textarea>
+      </div>
+    </section>
+  </form>
+</div>
+
+<script src="js/config.js"></script>
+<script type="module">
+  import { supabase } from "./js/supabase-client.js";
+
+  const invalidScreen = document.getElementById("invalid-screen");
+  const briefScreen = document.getElementById("brief-screen");
+  const form = document.getElementById("form");
+  const statusEl = document.getElementById("save-status");
+
+  const token = new URLSearchParams(location.search).get("t");
+
+  function showInvalid() {
+    invalidScreen.style.display = "block";
+    briefScreen.style.display = "none";
+  }
+
+  function fillForm(brief) {
+    for (const el of form.elements) {
+      if (!el.name || el.name === "aide") continue;
+      if (el.name in brief && brief[el.name] != null) {
+        el.value = brief[el.name];
+      }
+    }
+    const aide = Array.isArray(brief.aide) ? brief.aide : [];
+    form.querySelectorAll('input[name="aide"]').forEach((cb) => {
+      cb.checked = aide.includes(cb.value);
+    });
+  }
+
+  function formToObject() {
+    const data = {};
+    for (const el of form.elements) {
+      if (!el.name || el.name === "aide") continue;
+      data[el.name] = el.value || null;
+    }
+    data.aide = Array.from(form.querySelectorAll('input[name="aide"]:checked')).map((cb) => cb.value);
+    return data;
+  }
+
+  let saveTimer = null;
+
+  function scheduleSave() {
+    statusEl.textContent = "Modifications non enregistrées...";
+    statusEl.className = "save-status";
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(doSave, 800);
+  }
+
+  async function doSave() {
+    statusEl.textContent = "Enregistrement...";
+    statusEl.className = "save-status saving";
+    const { error } = await supabase.rpc("save_brief", {
+      p_token: token,
+      p_data: formToObject(),
+      p_par: "couple",
+    });
+    if (error) {
+      statusEl.textContent = "Erreur d'enregistrement : " + error.message;
+      statusEl.className = "save-status error";
+      return;
+    }
+    const now = new Date();
+    const hh = String(now.getHours()).padStart(2, "0");
+    const mm = String(now.getMinutes()).padStart(2, "0");
+    statusEl.textContent = `Enregistré à ${hh}:${mm}`;
+    statusEl.className = "save-status saved";
+  }
+
+  async function init() {
+    if (!token || !supabase) {
+      showInvalid();
+      return;
+    }
+    const { data, error } = await supabase.rpc("get_brief", { p_token: token });
+    if (error || !data || !data.id) {
+      showInvalid();
+      return;
+    }
+    fillForm(data);
+    briefScreen.style.display = "block";
+    form.addEventListener("input", scheduleSave);
+  }
+
+  init();
+</script>
+</body>
+</html>

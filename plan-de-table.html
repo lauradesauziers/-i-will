@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>I Will — Plan de table</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+<div class="app-shell" id="app-shell" style="display:none;">
+  <div id="app-nav"></div>
+  <main class="app-main" id="app-main">
+    <div id="page-topbar"></div>
+    <p class="page-eyebrow">Plan de table</p>
+    <h1>Simulateur de plan de table</h1>
+    <p class="page-desc">Glissez les invités vers une table — les compteurs se mettent à jour.</p>
+
+    <div style="margin-bottom:16px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+      <input type="text" id="new-table-nom" placeholder="Nom de la table (ex. Table 1)" style="padding:9px 12px; border:1px solid var(--border); border-radius:8px; font-size:14px; flex:1; min-width:160px;" />
+      <input type="number" id="new-table-capacite" placeholder="Capacité" value="8" style="width:90px; flex-shrink:0; padding:9px 12px; border:1px solid var(--border); border-radius:8px; font-size:14px;" />
+      <button class="btn-primary" id="add-table-btn" style="flex-shrink:0; white-space:nowrap;">+ Ajouter une table</button>
+    </div>
+
+    <div class="pool-box" data-table="unassigned">
+      <p class="pool-label" id="pool-label">À placer</p>
+      <div id="pool-list"></div>
+    </div>
+
+    <div class="kanban tables-kanban" id="kanban"></div>
+  </main>
+</div>
+<div class="page" id="no-couple" style="display:none;">
+  <div class="invalid-panel">
+    <h2>Aucun couple sélectionné</h2>
+    <p><a href="dashboard.html">Retourner à l'accueil</a> pour choisir un couple.</p>
+  </div>
+</div>
+
+<script src="js/config.js"></script>
+<script type="module">
+  import { supabase } from "./js/supabase-client.js";
+  import { renderNav, coupleIdFromUrl, requireSession } from "./js/nav.js";
+
+  const appShell = document.getElementById("app-shell");
+  const noCouple = document.getElementById("no-couple");
+  const kanbanEl = document.getElementById("kanban");
+  const poolEl = document.getElementById("pool-list");
+  const poolBox = document.querySelector(".pool-box");
+  let coupleId = null;
+
+  function escapeHtml(str) {
+    const div = document.createElement("div");
+    div.textContent = str == null ? "" : String(str);
+    return div.innerHTML;
+  }
+
+  async function loadBoard() {
+    const [{ data: tables, error: tErr }, { data: guests, error: gErr }] = await Promise.all([
+      supabase.from("seating_tables").select("*").eq("brief_id", coupleId).order("created_at", { ascending: true }),
+      supabase.from("guests").select("*").eq("brief_id", coupleId).order("nom", { ascending: true }),
+    ]);
+
+    if (tErr || gErr) {
+      kanbanEl.innerHTML = `<p class="status error">${escapeHtml((tErr || gErr).message)}</p>`;
+      return;
+    }
+
+    renderBoard(tables || [], guests || []);
+  }
+
+  function poolRow(g) {
+    return `
+      <div class="pool-row" draggable="true" data-id="${g.id}">
+        <span class="avatar avatar-blue">${escapeHtml((g.nom || "?")[0])}</span>
+        <span>${escapeHtml(g.nom)}</span>
+      </div>
+    `;
+  }
+
+  function guestRow(g) {
+    return `
+      <div class="guest-row" draggable="true" data-id="${g.id}">
+        <span class="avatar avatar-blue" style="width:22px; height:22px; font-size:10px;">${escapeHtml((g.nom || "?")[0])}</span>
+        <span>${escapeHtml(g.nom)}</span>
+        <button class="remove-guest" data-id="${g.id}" title="Retirer">✕</button>
+      </div>
+    `;
+  }
+
+  function renderBoard(tables, guests) {
+    const unassigned = guests.filter((g) => !g.table_id);
+    document.getElementById("pool-label").textContent = `À placer · ${unassigned.length}`;
+    poolEl.innerHTML = unassigned.length
+      ? unassigned.map(poolRow).join("")
+      : `<p class="empty" style="padding:20px 0;">Tous les invités sont placés.</p>`;
+
+    kanbanEl.innerHTML = tables.map((t) => {
+      const assigned = guests.filter((g) => g.table_id === t.id);
+      const over = assigned.length > t.capacite;
+      return `
+        <div class="kanban-col" data-table="${t.id}">
+          <h3 style="text-transform:none; font-size:14px; color:var(--ink); font-weight:600;">${escapeHtml(t.nom)}<span class="col-count">${assigned.length}/${t.capacite}</span></h3>
+          ${over ? `<div class="table-capacity over">Trop d'invités pour cette table</div>` : ""}
+          ${assigned.map(guestRow).join("") || `<p class="empty" style="padding:10px 0; font-size:13px;">Déposez des invités ici...</p>`}
+        </div>
+      `;
+    }).join("") + (tables.length === 0 ? `<p class="empty">Ajoutez une table pour commencer.</p>` : "");
+
+    attachDragHandlers();
+  }
+
+  function attachDragHandlers() {
+    const cards = [...poolEl.querySelectorAll(".pool-row"), ...kanbanEl.querySelectorAll(".guest-row")];
+    cards.forEach((card) => {
+      card.addEventListener("dragstart", (e) => {
+        e.dataTransfer.setData("text/plain", card.dataset.id);
+        card.classList.add("dragging");
+      });
+      card.addEventListener("dragend", () => card.classList.remove("dragging"));
+    });
+
+    kanbanEl.querySelectorAll(".remove-guest").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        await supabase.from("guests").update({ table_id: null }).eq("id", btn.dataset.id);
+        loadBoard();
+      });
+    });
+
+    const dropTargets = [poolBox, ...kanbanEl.querySelectorAll(".kanban-col")];
+    dropTargets.forEach((col) => {
+      col.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        col.classList.add("drop-target");
+      });
+      col.addEventListener("dragleave", () => col.classList.remove("drop-target"));
+      col.addEventListener("drop", async (e) => {
+        e.preventDefault();
+        col.classList.remove("drop-target");
+        const guestId = e.dataTransfer.getData("text/plain");
+        const tableKey = col.dataset.table;
+        const table_id = tableKey === "unassigned" ? null : tableKey;
+        await supabase.from("guests").update({ table_id }).eq("id", guestId);
+        loadBoard();
+      });
+    });
+  }
+
+  async function init() {
+    const session = await requireSession();
+    if (!session) return;
+
+    coupleId = coupleIdFromUrl();
+    if (!coupleId) {
+      noCouple.style.display = "block";
+      return;
+    }
+
+    appShell.style.display = "flex";
+    await renderNav("plan-de-table.html");
+    await loadBoard();
+
+    document.getElementById("add-table-btn").addEventListener("click", async () => {
+      const nom = document.getElementById("new-table-nom").value.trim() || "Nouvelle table";
+      const capacite = Number(document.getElementById("new-table-capacite").value) || 8;
+      await supabase.from("seating_tables").insert({ brief_id: coupleId, nom, capacite });
+      document.getElementById("new-table-nom").value = "";
+      loadBoard();
+    });
+  }
+
+  init();
+</script>
+</body>
+</html>

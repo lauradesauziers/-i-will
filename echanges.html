@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>I Will — Échanges</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+<div class="app-shell" id="app-shell" style="display:none;">
+  <div id="app-nav"></div>
+  <main class="app-main" id="app-main">
+    <div id="page-topbar"></div>
+    <p class="page-eyebrow">Échanges</p>
+    <h1>Ce que vous notez ensemble</h1>
+    <p class="page-desc">Vos notes et celles du couple, horodatées.</p>
+
+    <div class="card">
+      <div class="field">
+        <label for="new-message">Nouvelle note</label>
+        <textarea id="new-message" placeholder="Écrire une note sur ce couple..."></textarea>
+      </div>
+      <div class="actions" style="text-align:left; margin-top:0;">
+        <button class="btn-primary" id="send-btn">Envoyer</button>
+      </div>
+    </div>
+
+    <div id="messages-list" style="margin-top:24px;"></div>
+  </main>
+</div>
+<div class="page" id="no-couple" style="display:none;">
+  <div class="invalid-panel">
+    <h2>Aucun couple sélectionné</h2>
+    <p><a href="dashboard.html">Retourner à l'accueil</a> pour choisir un couple.</p>
+  </div>
+</div>
+
+<script src="js/config.js"></script>
+<script type="module">
+  import { supabase } from "./js/supabase-client.js";
+  import { renderNav, coupleIdFromUrl, requireSession } from "./js/nav.js";
+
+  const appShell = document.getElementById("app-shell");
+  const noCouple = document.getElementById("no-couple");
+  const listEl = document.getElementById("messages-list");
+  let coupleId = null;
+
+  function escapeHtml(str) {
+    const div = document.createElement("div");
+    div.textContent = str == null ? "" : String(str);
+    return div.innerHTML;
+  }
+
+  function fmtDate(d) {
+    return new Date(d).toLocaleString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  }
+
+  async function loadMessages() {
+    const { data: messages, error } = await supabase
+      .from("messages")
+      .select("*")
+      .eq("brief_id", coupleId)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      listEl.innerHTML = `<p class="status error">${escapeHtml(error.message)}</p>`;
+      return;
+    }
+
+    if (!messages || messages.length === 0) {
+      listEl.innerHTML = `<p class="empty">Aucun échange pour le moment.</p>`;
+      return;
+    }
+
+    listEl.innerHTML = messages.map((m) => `
+      <div class="response-card">
+        <div class="top">
+          <span class="names">${m.auteur === "couple" ? "Le couple" : "Laura"}</span>
+          <span class="date">${fmtDate(m.created_at)}</span>
+        </div>
+        <p style="margin:0; white-space:pre-wrap;">${escapeHtml(m.contenu)}</p>
+      </div>
+    `).join("");
+  }
+
+  async function init() {
+    const session = await requireSession();
+    if (!session) return;
+
+    coupleId = coupleIdFromUrl();
+    if (!coupleId) {
+      noCouple.style.display = "block";
+      return;
+    }
+
+    appShell.style.display = "flex";
+    await renderNav("echanges.html");
+
+    await loadMessages();
+
+    document.getElementById("send-btn").addEventListener("click", async () => {
+      const textarea = document.getElementById("new-message");
+      const contenu = textarea.value.trim();
+      if (!contenu) return;
+      await supabase.from("messages").insert({ brief_id: coupleId, auteur: "laura", contenu });
+      textarea.value = "";
+      loadMessages();
+    });
+  }
+
+  init();
+</script>
+</body>
+</html>

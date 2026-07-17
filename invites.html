@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>I Will — Invités</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+<div class="app-shell" id="app-shell" style="display:none;">
+  <div id="app-nav"></div>
+  <main class="app-main" id="app-main">
+    <div id="page-topbar"></div>
+    <p class="page-eyebrow">Invités</p>
+    <h1>Qui sera là</h1>
+    <p class="page-desc">Suivez les confirmations au fil des réponses.</p>
+
+    <div class="stat-row" id="stat-row"></div>
+
+    <div style="margin-bottom:16px;">
+      <button class="btn-primary" id="add-guest-btn">+ Ajouter un invité</button>
+    </div>
+
+    <div class="table-scroll">
+      <table class="table-simple">
+        <thead>
+          <tr>
+            <th>Nom</th>
+            <th>Groupe</th>
+            <th>RSVP</th>
+            <th>Notes</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="guest-rows"></tbody>
+      </table>
+    </div>
+  </main>
+</div>
+<div class="page" id="no-couple" style="display:none;">
+  <div class="invalid-panel">
+    <h2>Aucun couple sélectionné</h2>
+    <p><a href="dashboard.html">Retourner à l'accueil</a> pour choisir un couple.</p>
+  </div>
+</div>
+
+<script src="js/config.js"></script>
+<script type="module">
+  import { supabase } from "./js/supabase-client.js";
+  import { renderNav, coupleIdFromUrl, requireSession } from "./js/nav.js";
+
+  const appShell = document.getElementById("app-shell");
+  const noCouple = document.getElementById("no-couple");
+  const rowsEl = document.getElementById("guest-rows");
+  let coupleId = null;
+
+  function escapeHtml(str) {
+    const div = document.createElement("div");
+    div.textContent = str == null ? "" : String(str);
+    return div.innerHTML;
+  }
+
+  async function loadGuests() {
+    const { data: guests, error } = await supabase
+      .from("guests")
+      .select("*")
+      .eq("brief_id", coupleId)
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      rowsEl.innerHTML = `<tr><td colspan="5" class="status error">${escapeHtml(error.message)}</td></tr>`;
+      return;
+    }
+
+    renderStats(guests || []);
+    renderRows(guests || []);
+  }
+
+  function renderStats(guests) {
+    const oui = guests.filter((g) => g.rsvp_status === "oui").length;
+    const non = guests.filter((g) => g.rsvp_status === "non").length;
+    const attente = guests.filter((g) => g.rsvp_status === "en_attente").length;
+    document.getElementById("stat-row").innerHTML = `
+      <div class="stat-card"><div class="label">Total</div><div class="value">${guests.length}</div></div>
+      <div class="stat-card"><div class="label">Confirmés</div><div class="value">${oui}</div></div>
+      <div class="stat-card"><div class="label">Déclinés</div><div class="value">${non}</div></div>
+      <div class="stat-card"><div class="label">En attente</div><div class="value">${attente}</div></div>
+    `;
+  }
+
+  function renderRows(guests) {
+    if (guests.length === 0) {
+      rowsEl.innerHTML = `<tr><td colspan="5" class="empty">Aucun invité. Ajoutez-en un.</td></tr>`;
+      return;
+    }
+    rowsEl.innerHTML = guests.map((g) => `
+      <tr data-id="${g.id}">
+        <td><input type="text" value="${escapeHtml(g.nom || "")}" data-field="nom" /></td>
+        <td><input type="text" value="${escapeHtml(g.groupe || "")}" data-field="groupe" placeholder="famille, amis..." /></td>
+        <td>
+          <select data-field="rsvp_status">
+            <option value="en_attente" ${g.rsvp_status === "en_attente" ? "selected" : ""}>En attente</option>
+            <option value="oui" ${g.rsvp_status === "oui" ? "selected" : ""}>Confirmé</option>
+            <option value="non" ${g.rsvp_status === "non" ? "selected" : ""}>Décliné</option>
+          </select>
+        </td>
+        <td><input type="text" value="${escapeHtml(g.notes || "")}" data-field="notes" /></td>
+        <td><button class="btn-secondary delete-row" data-id="${g.id}">✕</button></td>
+      </tr>
+    `).join("");
+  }
+
+  let saveTimers = {};
+
+  function attachHandlers() {
+    rowsEl.addEventListener("input", (e) => handleFieldChange(e, 500));
+    rowsEl.addEventListener("change", (e) => {
+      if (e.target.tagName === "SELECT") handleFieldChange(e, 0);
+    });
+
+    rowsEl.addEventListener("click", async (e) => {
+      if (!e.target.classList.contains("delete-row")) return;
+      await supabase.from("guests").delete().eq("id", e.target.dataset.id);
+      loadGuests();
+    });
+  }
+
+  function handleFieldChange(e, delay) {
+    const row = e.target.closest("tr");
+    if (!row) return;
+    const id = row.dataset.id;
+    if (!id) return;
+
+    clearTimeout(saveTimers[id]);
+    saveTimers[id] = setTimeout(async () => {
+      const payload = {};
+      row.querySelectorAll("[data-field]").forEach((el) => {
+        payload[el.dataset.field] = el.value || null;
+      });
+      await supabase.from("guests").update(payload).eq("id", id);
+      const { data: guests } = await supabase.from("guests").select("*").eq("brief_id", coupleId);
+      renderStats(guests || []);
+    }, delay);
+  }
+
+  async function init() {
+    const session = await requireSession();
+    if (!session) return;
+
+    coupleId = coupleIdFromUrl();
+    if (!coupleId) {
+      noCouple.style.display = "block";
+      return;
+    }
+
+    appShell.style.display = "flex";
+    await renderNav("invites.html");
+
+    await loadGuests();
+    attachHandlers();
+
+    document.getElementById("add-guest-btn").addEventListener("click", async () => {
+      await supabase.from("guests").insert({ brief_id: coupleId, nom: "Nouvel invité" });
+      loadGuests();
+    });
+  }
+
+  init();
+</script>
+</body>
+</html>
