@@ -6,7 +6,10 @@ const TABS = [
   { href: "brief.html", label: "Mon brief" },
   { href: "budget-couple.html", label: "Budget" },
   { href: "prestataires-couple.html", label: "Prestataires" },
+  { href: "taches-couple.html", label: "Tâches" },
+  { href: "retroplanning-couple.html", label: "Rétroplanning" },
   { href: "plan-de-table-couple.html", label: "Plan de table" },
+  { href: "echanges-couple.html", label: "Échanges" },
 ];
 
 export function renderCoupleTabs(activeHref) {

@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>I Will — Échanges</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+<div class="page" id="invalid-screen" style="display:none;">
+  <div class="brand">
+    <p class="logo">I Will</p>
+  </div>
+  <div class="invalid-panel">
+    <h2>Lien invalide</h2>
+    <p>Ce lien ne correspond à aucun brief. Vérifiez que vous avez bien copié l'adresse complète, ou contactez votre wedding planner.</p>
+  </div>
+</div>
+
+<div class="page" id="chat-screen" style="display:none;">
+  <div class="brief-header">
+    <div id="couple-logo"><p class="logo" style="margin:0;">I Will</p></div>
+  </div>
+  <nav class="couple-tabs" id="couple-tabs"></nav>
+
+  <h2 style="margin-top:0;">Le fil avec votre wedding planner</h2>
+
+  <div class="chat-thread" id="messages-list" style="margin-bottom:20px;"></div>
+
+  <div class="card" style="margin:0;">
+    <div class="field" style="margin-bottom:10px;">
+      <textarea id="new-message" placeholder="Écrire un message..." style="min-height:60px;"></textarea>
+    </div>
+    <div class="actions" style="text-align:left; margin-top:0;">
+      <button class="btn-primary" id="send-btn">Envoyer</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/config.js"></script>
+<script type="module">
+  import { supabase } from "./js/supabase-client.js";
+  import { renderCoupleTabs, renderCoupleLogo, coupleTokenFromUrl } from "./js/couple-nav.js";
+
+  const invalidScreen = document.getElementById("invalid-screen");
+  const chatScreen = document.getElementById("chat-screen");
+  const listEl = document.getElementById("messages-list");
+  let token = null;
+
+  function escapeHtml(str) {
+    const div = document.createElement("div");
+    div.textContent = str == null ? "" : String(str);
+    return div.innerHTML;
+  }
+
+  function fmtDate(d) {
+    return new Date(d).toLocaleString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  }
+
+  async function loadMessages() {
+    const { data: messages, error } = await supabase.rpc("get_couple_messages", { p_token: token });
+
+    if (error) {
+      listEl.innerHTML = `<p class="status error">${escapeHtml(error.message)}</p>`;
+      return;
+    }
+
+    if (!messages || messages.length === 0) {
+      listEl.innerHTML = `<p class="empty">Aucun échange pour le moment.</p>`;
+      return;
+    }
+
+    listEl.innerHTML = messages.map((m) => {
+      const mine = m.auteur === "couple";
+      return `
+        <div class="chat-row ${mine ? "mine" : ""}">
+          <span class="avatar ${mine ? "avatar-blue" : "avatar-gold"}" style="flex-shrink:0;">${mine ? "C" : "L"}</span>
+          <div class="chat-bubble">
+            <div class="chat-name">${mine ? "Vous" : "Laura"}</div>
+            <div class="chat-content">${escapeHtml(m.contenu)}</div>
+            <div class="chat-time">${fmtDate(m.created_at)}</div>
+          </div>
+        </div>
+      `;
+    }).join("");
+  }
+
+  async function init() {
+    token = coupleTokenFromUrl();
+    if (!token || !supabase) {
+      invalidScreen.style.display = "block";
+      return;
+    }
+    const { data, error } = await supabase.rpc("get_brief", { p_token: token });
+    if (error || !data || !data.id) {
+      invalidScreen.style.display = "block";
+      return;
+    }
+    chatScreen.style.display = "block";
+    renderCoupleTabs("echanges-couple.html");
+    renderCoupleLogo(supabase, token);
+    await loadMessages();
+
+    document.getElementById("send-btn").addEventListener("click", async () => {
+      const textarea = document.getElementById("new-message");
+      const contenu = textarea.value.trim();
+      if (!contenu) return;
+      await supabase.rpc("send_couple_message", { p_token: token, p_contenu: contenu });
+      textarea.value = "";
+      loadMessages();
+    });
+  }
+
+  init();
+</script>
+</body>
+</html>

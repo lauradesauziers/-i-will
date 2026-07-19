@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>I Will — Tâches</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+<div class="page" id="invalid-screen" style="display:none;">
+  <div class="brand">
+    <p class="logo">I Will</p>
+  </div>
+  <div class="invalid-panel">
+    <h2>Lien invalide</h2>
+    <p>Ce lien ne correspond à aucun brief. Vérifiez que vous avez bien copié l'adresse complète, ou contactez votre wedding planner.</p>
+  </div>
+</div>
+
+<div class="page" id="tasks-screen" style="display:none;">
+  <div class="brief-header">
+    <div id="couple-logo"><p class="logo" style="margin:0;">I Will</p></div>
+  </div>
+  <nav class="couple-tabs" id="couple-tabs"></nav>
+
+  <h2 style="margin-top:0;">Vos tâches</h2>
+  <p class="readonly-note">Vous pouvez cocher les vôtres — celles de votre wedding planner restent grisées.</p>
+
+  <div class="task-list" id="task-list"></div>
+</div>
+
+<script src="js/config.js"></script>
+<script type="module">
+  import { supabase } from "./js/supabase-client.js";
+  import { renderCoupleTabs, renderCoupleLogo, coupleTokenFromUrl } from "./js/couple-nav.js";
+
+  const invalidScreen = document.getElementById("invalid-screen");
+  const tasksScreen = document.getElementById("tasks-screen");
+  const listEl = document.getElementById("task-list");
+  let token = null;
+
+  function escapeHtml(str) {
+    const div = document.createElement("div");
+    div.textContent = str == null ? "" : String(str);
+    return div.innerHTML;
+  }
+
+  function avatar(assignee) {
+    if (assignee === "couple") return `<span class="avatar avatar-blue" style="width:24px;height:24px;font-size:11px;">C</span>`;
+    return `<span class="avatar avatar-gold" style="width:24px;height:24px;font-size:11px;">L</span>`;
+  }
+
+  function render(tasks) {
+    if (tasks.length === 0) {
+      listEl.innerHTML = `<p class="empty" style="padding:24px;">Aucune tâche pour le moment.</p>`;
+      return;
+    }
+    listEl.innerHTML = tasks.map((t) => `
+      <div class="task-row ${t.done ? "done" : ""}" data-id="${t.id}">
+        <input type="checkbox" data-field="done" ${t.done ? "checked" : ""} ${t.assignee === "couple" ? "" : "disabled"} />
+        <div class="task-main">
+          <div class="task-titre">${escapeHtml(t.titre)}</div>
+          ${t.description ? `<div class="task-desc">${escapeHtml(t.description)}</div>` : ""}
+        </div>
+        ${avatar(t.assignee)}
+        ${t.due_date ? `<span class="task-date">${new Date(t.due_date).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}</span>` : ""}
+      </div>
+    `).join("");
+
+    listEl.querySelectorAll('[data-field="done"]').forEach((cb) => {
+      cb.addEventListener("change", async () => {
+        const id = cb.closest(".task-row").dataset.id;
+        const { error } = await supabase.rpc("couple_toggle_task", { p_token: token, p_task_id: id, p_done: cb.checked });
+        if (error) cb.checked = !cb.checked;
+        loadTasks();
+      });
+    });
+  }
+
+  async function loadTasks() {
+    const { data, error } = await supabase.rpc("get_couple_tasks", { p_token: token });
+    if (error) {
+      listEl.innerHTML = `<p class="status error">${escapeHtml(error.message)}</p>`;
+      return;
+    }
+    render(data || []);
+  }
+
+  async function init() {
+    token = coupleTokenFromUrl();
+    if (!token || !supabase) {
+      invalidScreen.style.display = "block";
+      return;
+    }
+    const { data, error } = await supabase.rpc("get_brief", { p_token: token });
+    if (error || !data || !data.id) {
+      invalidScreen.style.display = "block";
+      return;
+    }
+    tasksScreen.style.display = "block";
+    renderCoupleTabs("taches-couple.html");
+    renderCoupleLogo(supabase, token);
+    await loadTasks();
+  }
+
+  init();
+</script>
+</body>
+</html>

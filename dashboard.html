@@ -305,7 +305,53 @@
         <p style="font-size:14px; word-break:break-all;"><code>${escapeHtml(shareLink)}</code></p>
         <a class="btn-secondary" href="${escapeHtml(shareLink)}" target="_blank" rel="noopener">Ouvrir le brief</a>
       </div>
+
+      <div class="card">
+        <h2 style="margin-top:0;">Accès couple</h2>
+        <p style="font-size:13px; color:var(--muted); margin:0 0 14px;">
+          ${brief.login_email
+            ? `Ils se connectent avec <strong>${escapeHtml(brief.login_email)}</strong> sur la page de connexion couple. Change le mot de passe ici si besoin.`
+            : "Donne-leur un email + mot de passe pour se connecter directement, sans passer par le lien secret."}
+        </p>
+        <div class="row">
+          <div class="field">
+            <label for="couple-login-email">Email</label>
+            <input type="email" id="couple-login-email" value="${escapeHtml(brief.login_email || "")}" />
+          </div>
+          <div class="field">
+            <label for="couple-login-password">${brief.login_email ? "Nouveau mot de passe" : "Mot de passe"}</label>
+            <input type="text" id="couple-login-password" placeholder="••••••••" />
+          </div>
+        </div>
+        <div class="actions" style="text-align:left; margin-top:10px;">
+          <button class="btn-primary" id="save-couple-login">Enregistrer</button>
+          <span id="couple-login-status" style="font-size:13px; margin-left:10px;"></span>
+        </div>
+        <p style="font-size:13px; color:var(--muted); margin:10px 0 0;">
+          Lien de connexion à leur donner : <code>${escapeHtml(location.origin + location.pathname.replace("dashboard.html", "couple-login.html"))}</code>
+        </p>
+      </div>
     `;
+
+    document.getElementById("save-couple-login").addEventListener("click", async () => {
+      const email = document.getElementById("couple-login-email").value.trim();
+      const password = document.getElementById("couple-login-password").value;
+      const statusEl = document.getElementById("couple-login-status");
+      if (!email || !password) {
+        statusEl.textContent = "Email et mot de passe requis.";
+        statusEl.style.color = "var(--danger)";
+        return;
+      }
+      const { error } = await supabase.rpc("set_couple_credentials", { p_brief_id: coupleId, p_email: email, p_password: password });
+      if (error) {
+        statusEl.textContent = "Erreur : " + error.message;
+        statusEl.style.color = "var(--danger)";
+        return;
+      }
+      statusEl.textContent = "Enregistré.";
+      statusEl.style.color = "var(--success)";
+      document.getElementById("couple-login-password").value = "";
+    });
   }
 
   async function renderApp() {

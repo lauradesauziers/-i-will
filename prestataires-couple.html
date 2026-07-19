@@ -25,8 +25,8 @@
   </div>
   <nav class="couple-tabs" id="couple-tabs"></nav>
 
-  <h2 style="margin-top:0;">Vos prestataires validés</h2>
-  <p class="readonly-note">Ceux encore en discussion n'apparaissent pas ici — juste ce qui est confirmé.</p>
+  <h2 style="margin-top:0;">Vos prestataires</h2>
+  <p class="readonly-note">Vue en lecture seule — c'est votre wedding planner qui ajoute et fait évoluer cette liste.</p>
 
   <div id="vendors-list" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:16px;"></div>
 </div>
@@ -46,14 +46,30 @@
     return div.innerHTML;
   }
 
+  const STATUS_LABELS = {
+    a_contacter: "À contacter",
+    devis: "Devis reçu",
+    coup_de_coeur: "Coup de cœur",
+    valide: "Validé / signé",
+  };
+  const STATUS_CLASS = {
+    a_contacter: "neutral",
+    devis: "warn",
+    coup_de_coeur: "warn",
+    valide: "success",
+  };
+
   function render(vendors) {
     if (vendors.length === 0) {
-      listEl.innerHTML = `<p class="empty">Aucun prestataire validé pour le moment.</p>`;
+      listEl.innerHTML = `<p class="empty">Aucun prestataire pour le moment.</p>`;
       return;
     }
     listEl.innerHTML = vendors.map((v) => `
       <div class="kanban-card">
-        ${v.categorie ? `<div class="vendor-eyebrow">${escapeHtml(v.categorie)}</div>` : ""}
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
+          ${v.categorie ? `<div class="vendor-eyebrow">${escapeHtml(v.categorie)}</div>` : "<span></span>"}
+          <span class="status-badge ${STATUS_CLASS[v.statut] || "neutral"}">${STATUS_LABELS[v.statut] || v.statut}</span>
+        </div>
         <div class="vendor-nom">${escapeHtml(v.nom)}</div>
         <div class="vendor-meta">
           <span>${escapeHtml(v.notes || "")}</span>
@@ -69,7 +85,7 @@
       invalidScreen.style.display = "block";
       return;
     }
-    const { data, error } = await supabase.rpc("get_couple_vendors", { p_token: token });
+    const { data, error } = await supabase.rpc("get_couple_vendors_full", { p_token: token });
     if (error) {
       invalidScreen.style.display = "block";
       return;
