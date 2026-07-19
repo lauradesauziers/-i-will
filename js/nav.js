@@ -124,7 +124,7 @@ export async function renderNav(activeHref) {
 
   mount.innerHTML = `
     ${brandHtml}
-    ${coupleLabel ? `<div class="nav-couple">${escapeHtml(coupleLabel)}</div>` : ""}
+    ${coupleLabel && !logoUrl ? `<div class="nav-couple">${escapeHtml(coupleLabel)}</div>` : ""}
     <nav class="nav-links">${items}${briefLink}</nav>
     ${footerPeople ? `<div class="nav-footer">${footerPeople}</div>` : ""}
     <button class="theme-toggle" id="theme-toggle" type="button">◐ Thème</button>
