@@ -47,17 +47,19 @@ export async function renderNav(activeHref) {
   let coupleLabel = "";
   let shareToken = "";
   let weddingDate = "";
+  let logoUrl = "";
   let counts = {};
 
   if (coupleId) {
     const { data } = await supabase
       .from("briefs")
-      .select("couple_nom, share_token, date_mariage")
+      .select("couple_nom, share_token, date_mariage, logo_url")
       .eq("id", coupleId)
       .maybeSingle();
     coupleLabel = data?.couple_nom || "";
     shareToken = data?.share_token || "";
     weddingDate = data?.date_mariage || "";
+    logoUrl = data?.logo_url || "";
 
     const [{ count: vendorsCount }, { count: tasksCount }, { count: messagesCount }] = await Promise.all([
       supabase.from("vendors").select("id", { count: "exact", head: true }).eq("brief_id", coupleId),
@@ -111,8 +113,12 @@ export async function renderNav(activeHref) {
     document.title = suffix ? `Mariage ${coupleLabel} —${suffix}` : `Mariage ${coupleLabel}`;
   }
 
+  const brandHtml = logoUrl
+    ? `<img src="${logoUrl}" alt="${escapeHtml(coupleLabel)}" class="nav-brand-logo" />`
+    : `<div class="nav-brand">I Will</div>`;
+
   mount.innerHTML = `
-    <div class="nav-brand">I Will</div>
+    ${brandHtml}
     ${coupleLabel ? `<div class="nav-couple">${escapeHtml(coupleLabel)}</div>` : ""}
     <nav class="nav-links">${items}${briefLink}</nav>
     ${footerPeople ? `<div class="nav-footer">${footerPeople}</div>` : ""}

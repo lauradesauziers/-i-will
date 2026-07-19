@@ -655,6 +655,13 @@ button.primary:disabled { opacity: 0.6; cursor: not-allowed; }
   padding: 0 8px 4px;
 }
 
+.nav-brand-logo {
+  max-height: 48px;
+  width: auto;
+  margin: 0 8px 4px;
+  display: block;
+}
+
 .nav-couple {
   padding: 0 8px 20px;
   font-size: 13px;
