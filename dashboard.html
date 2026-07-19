@@ -234,9 +234,12 @@
           <div class="value">${countdown}</div>
         </div>
         <div class="stat-card">
-          <div class="label">Budget engagé</div>
-          <div class="value">${totals.engage.toLocaleString("fr-FR")} €</div>
-          <div style="font-size:12px; color:var(--muted); margin-top:4px;">sur ${totals.prevu.toLocaleString("fr-FR")} € fixés</div>
+          <div class="label">Budget de départ</div>
+          <div class="value">${brief.budget_global == null ? "—" : brief.budget_global.toLocaleString("fr-FR") + " €"}</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">Reste disponible</div>
+          <div class="value" style="color:${brief.budget_global == null ? "var(--muted)" : (brief.budget_global - totals.prevu) < 0 ? "var(--danger)" : "var(--success)"};">${brief.budget_global == null ? "—" : (brief.budget_global - totals.prevu).toLocaleString("fr-FR") + " €"}</div>
         </div>
         <div class="stat-card" style="display:flex; align-items:center; gap:16px;">
           <div style="width:56px; height:56px; border-radius:999px; flex-shrink:0; background:conic-gradient(var(--blue-accent) ${donutDeg}deg, var(--neutral-bg) 0deg); display:flex; align-items:center; justify-content:center;">

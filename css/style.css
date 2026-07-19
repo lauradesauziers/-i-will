@@ -894,6 +894,43 @@ button.primary:disabled { opacity: 0.6; cursor: not-allowed; }
   color: var(--heading);
 }
 
+.stat-card.editable {
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+.stat-card.editable:hover { border-color: var(--navy); }
+.stat-card.editable .value.cta {
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--navy);
+}
+.stat-card .edit-hint {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+.budget-global-edit {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.budget-global-edit input[type="number"] {
+  width: 110px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 16px;
+  font-family: inherit;
+  background: var(--card-bg);
+  color: var(--ink);
+}
+.budget-global-edit input[type="number"]:focus {
+  outline: none;
+  border-color: var(--navy-light);
+  box-shadow: 0 0 0 3px rgba(44, 66, 112, 0.12);
+}
+
 .budget-bar-wrap {
   background: var(--card-bg);
   border: 1px solid var(--border);

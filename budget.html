@@ -19,9 +19,9 @@
 
     <div class="budget-bar-wrap">
       <div class="stat-row" style="margin-bottom:0;">
-        <div class="stat-card" style="border:none; padding:0;">
-          <div class="label">Enveloppe fixée</div>
-          <div class="value" id="total-prevu">0 €</div>
+        <div class="stat-card editable" id="budget-global-card" style="border:none; padding:0;">
+          <div class="label">Budget de départ</div>
+          <div id="budget-global-display"></div>
         </div>
         <div class="stat-card" style="border:none; padding:0;">
           <div class="label">Déjà payé</div>
@@ -32,8 +32,8 @@
           <div class="value" id="total-engage">0 €</div>
         </div>
         <div class="stat-card" style="border:none; padding:0;">
-          <div class="label">Marge restante</div>
-          <div class="value" id="total-marge" style="color:var(--success);">0 €</div>
+          <div class="label">Reste disponible</div>
+          <div class="value" id="total-disponible" style="color:var(--success);">—</div>
         </div>
       </div>
       <div class="budget-bar" id="budget-bar">
@@ -85,6 +85,12 @@
   const appShell = document.getElementById("app-shell");
   const noCouple = document.getElementById("no-couple");
   const rowsEl = document.getElementById("budget-rows");
+  const budgetGlobalCard = document.getElementById("budget-global-card");
+  const budgetGlobalDisplay = document.getElementById("budget-global-display");
+  let budgetGlobal = null;
+  let currentCoupleId = null;
+  let currentItems = [];
+  let editingBudgetGlobal = false;
 
   function escapeHtml(str) {
     const div = document.createElement("div");
@@ -108,10 +114,13 @@
   }
 
   async function loadBudget(coupleId) {
-    const { data: brief } = await supabase.from("briefs").select("couple_nom").eq("id", coupleId).maybeSingle();
+    currentCoupleId = coupleId;
+    const { data: brief } = await supabase.from("briefs").select("couple_nom, budget_global").eq("id", coupleId).maybeSingle();
     document.getElementById("couple-subtitle").textContent = brief?.couple_nom
       ? `Vous avez fixé une enveloppe pour ${brief.couple_nom} — voici, poste par poste, ce qui est prévu, engagé et déjà réglé.`
       : "";
+    budgetGlobal = brief?.budget_global ?? null;
+    renderBudgetGlobal();
 
     const { data: items, error } = await supabase
       .from("budget_items")
@@ -128,21 +137,62 @@
     updateTotals(items || []);
   }
 
+  function renderBudgetGlobal() {
+    if (editingBudgetGlobal) {
+      budgetGlobalDisplay.innerHTML = `
+        <form class="budget-global-edit" id="budget-global-form">
+          <input type="number" id="budget-global-input" value="${budgetGlobal ?? ""}" placeholder="ex. 30000" autofocus />
+          <button type="submit" class="btn-primary" style="padding:8px 16px;">OK</button>
+        </form>
+      `;
+      const input = document.getElementById("budget-global-input");
+      input.focus();
+      input.select();
+      document.getElementById("budget-global-form").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const value = input.value === "" ? null : Number(input.value);
+        budgetGlobal = value;
+        editingBudgetGlobal = false;
+        renderBudgetGlobal();
+        updateTotals(currentItems);
+        await supabase.from("briefs").update({ budget_global: value }).eq("id", currentCoupleId);
+      });
+    } else if (budgetGlobal == null) {
+      budgetGlobalDisplay.innerHTML = `<div class="value cta">Définir le budget de départ →</div>`;
+    } else {
+      budgetGlobalDisplay.innerHTML = `
+        <div class="value">${fmt(budgetGlobal)}</div>
+        <div class="edit-hint">✎ modifier</div>
+      `;
+    }
+  }
+
+  budgetGlobalCard.addEventListener("click", () => {
+    if (editingBudgetGlobal) return;
+    editingBudgetGlobal = true;
+    renderBudgetGlobal();
+  });
+
   function updateTotals(items) {
+    currentItems = items;
     const totals = items.reduce((acc, i) => ({
       prevu: acc.prevu + Number(i.montant_prevu || 0),
       engage: acc.engage + Number(i.montant_engage || 0),
       paye: acc.paye + Number(i.montant_paye || 0),
     }), { prevu: 0, engage: 0, paye: 0 });
 
-    document.getElementById("total-prevu").textContent = fmt(totals.prevu);
     document.getElementById("total-engage").textContent = fmt(totals.engage);
     document.getElementById("total-paye").textContent = fmt(totals.paye);
 
-    const marge = totals.prevu - totals.engage;
-    const margeEl = document.getElementById("total-marge");
-    margeEl.textContent = fmt(marge);
-    margeEl.style.color = marge < 0 ? "var(--danger)" : "var(--success)";
+    const dispoEl = document.getElementById("total-disponible");
+    if (budgetGlobal == null) {
+      dispoEl.textContent = "—";
+      dispoEl.style.color = "var(--muted)";
+    } else {
+      const disponible = budgetGlobal - totals.prevu;
+      dispoEl.textContent = fmt(disponible);
+      dispoEl.style.color = disponible < 0 ? "var(--danger)" : "var(--success)";
+    }
 
     const base = totals.prevu > 0 ? totals.prevu : 1;
     const payePct = Math.min(100, (totals.paye / base) * 100);

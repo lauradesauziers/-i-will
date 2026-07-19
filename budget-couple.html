@@ -31,8 +31,8 @@
   <div class="budget-bar-wrap">
     <div class="stat-row" style="margin-bottom:0;">
       <div class="stat-card" style="border:none; padding:0;">
-        <div class="label">Enveloppe fixée</div>
-        <div class="value" id="total-prevu">0 €</div>
+        <div class="label">Budget de départ</div>
+        <div class="value" id="total-budget-global">—</div>
       </div>
       <div class="stat-card" style="border:none; padding:0;">
         <div class="label">Déjà payé</div>
@@ -41,6 +41,10 @@
       <div class="stat-card" style="border:none; padding:0;">
         <div class="label">Engagé</div>
         <div class="value" id="total-engage">0 €</div>
+      </div>
+      <div class="stat-card" style="border:none; padding:0;">
+        <div class="label">Reste disponible</div>
+        <div class="value" id="total-disponible" style="color:var(--success);">—</div>
       </div>
     </div>
     <div class="budget-bar" id="budget-bar">
@@ -100,7 +104,7 @@
     return `<span class="status-badge neutral">—</span>`;
   }
 
-  function render(items) {
+  function render(items, budgetGlobal) {
     if (items.length === 0) {
       rowsEl.innerHTML = `<tr><td colspan="5" class="empty">Aucun poste de budget pour le moment.</td></tr>`;
       return;
@@ -121,9 +125,19 @@
       paye: acc.paye + Number(i.montant_paye || 0),
     }), { prevu: 0, engage: 0, paye: 0 });
 
-    document.getElementById("total-prevu").textContent = fmt(totals.prevu);
     document.getElementById("total-engage").textContent = fmt(totals.engage);
     document.getElementById("total-paye").textContent = fmt(totals.paye);
+
+    document.getElementById("total-budget-global").textContent = budgetGlobal == null ? "—" : fmt(budgetGlobal);
+    const dispoEl = document.getElementById("total-disponible");
+    if (budgetGlobal == null) {
+      dispoEl.textContent = "—";
+      dispoEl.style.color = "var(--muted)";
+    } else {
+      const disponible = budgetGlobal - totals.prevu;
+      dispoEl.textContent = fmt(disponible);
+      dispoEl.style.color = disponible < 0 ? "var(--danger)" : "var(--success)";
+    }
 
     const base = totals.prevu > 0 ? totals.prevu : 1;
     const payePct = Math.min(100, (totals.paye / base) * 100);
@@ -138,7 +152,10 @@
       invalidScreen.style.display = "block";
       return;
     }
-    const { data, error } = await supabase.rpc("get_couple_budget", { p_token: token });
+    const [{ data, error }, { data: brief }] = await Promise.all([
+      supabase.rpc("get_couple_budget", { p_token: token }),
+      supabase.rpc("get_brief", { p_token: token }),
+    ]);
     if (error) {
       invalidScreen.style.display = "block";
       return;
@@ -146,7 +163,7 @@
     budgetScreen.style.display = "block";
     renderCoupleTabs("budget-couple.html");
     renderCoupleLogo(supabase, token);
-    render(data || []);
+    render(data || [], brief?.budget_global ?? null);
   }
 
   init();
