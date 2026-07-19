@@ -35,6 +35,7 @@
   const noCouple = document.getElementById("no-couple");
   const timelineEl = document.getElementById("timeline");
   let coupleId = null;
+  let coupleLabel = "Couple";
 
   function escapeHtml(str) {
     const div = document.createElement("div");
@@ -59,8 +60,9 @@
   }
 
   async function loadTimeline() {
-    const { data: brief } = await supabase.from("briefs").select("date_mariage").eq("id", coupleId).maybeSingle();
+    const { data: brief } = await supabase.from("briefs").select("date_mariage, couple_nom").eq("id", coupleId).maybeSingle();
     const weddingDate = brief?.date_mariage ? new Date(brief.date_mariage) : null;
+    if (brief?.couple_nom) coupleLabel = brief.couple_nom;
 
     const { data: tasks, error } = await supabase
       .from("tasks")
@@ -164,7 +166,7 @@
       <li class="${t.done ? "done" : ""}">
         <input type="checkbox" data-task-id="${t.id}" ${t.done ? "checked" : ""} />
         <span>${escapeHtml(t.titre)}</span>
-        <span class="item-assignee">${t.assignee === "couple" ? "Couple" : "Laura"}</span>
+        <span class="item-assignee">${t.assignee === "couple" ? escapeHtml(coupleLabel) : "Laura"}</span>
       </li>
     `;
   }

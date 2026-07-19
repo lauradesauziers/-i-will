@@ -660,6 +660,7 @@ button.primary:disabled { opacity: 0.6; cursor: not-allowed; }
   width: auto;
   margin: 0 8px 4px;
   display: block;
+  align-self: flex-start;
 }
 
 .nav-couple {

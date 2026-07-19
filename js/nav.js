@@ -48,18 +48,22 @@ export async function renderNav(activeHref) {
   let shareToken = "";
   let weddingDate = "";
   let logoUrl = "";
+  let partner1Role = "";
+  let partner2Role = "";
   let counts = {};
 
   if (coupleId) {
     const { data } = await supabase
       .from("briefs")
-      .select("couple_nom, share_token, date_mariage, logo_url")
+      .select("couple_nom, share_token, date_mariage, logo_url, partner1_role, partner2_role")
       .eq("id", coupleId)
       .maybeSingle();
     coupleLabel = data?.couple_nom || "";
     shareToken = data?.share_token || "";
     weddingDate = data?.date_mariage || "";
     logoUrl = data?.logo_url || "";
+    partner1Role = data?.partner1_role || "";
+    partner2Role = data?.partner2_role || "";
 
     const [{ count: vendorsCount }, { count: tasksCount }, { count: messagesCount }] = await Promise.all([
       supabase.from("vendors").select("id", { count: "exact", head: true }).eq("brief_id", coupleId),
@@ -93,12 +97,13 @@ export async function renderNav(activeHref) {
     : `<a class="nav-link disabled" href="#"><span class="nav-icon">✎</span>Le brief</a>`;
 
   const names = coupleLabel.split(/&| et /i).map((s) => s.trim()).filter(Boolean);
+  const partnerRoles = [partner1Role, partner2Role];
   const footerPeople = coupleId
     ? `
-      ${names.map((n) => `
+      ${names.map((n, i) => `
         <div class="person">
           <span class="avatar avatar-blue">${escapeHtml(n[0] || "?")}</span>
-          <span><span class="name">${escapeHtml(n)}</span><span class="role">Couple</span></span>
+          <span><span class="name">${escapeHtml(n)}</span><span class="role">${escapeHtml(partnerRoles[i] || "Couple")}</span></span>
         </div>
       `).join("")}
       <div class="person">

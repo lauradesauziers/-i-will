@@ -23,7 +23,7 @@
 
     <div class="filter-pills" id="filter-pills">
       <button class="filter-pill active" data-filter="all">Tout le monde</button>
-      <button class="filter-pill" data-filter="couple">Couple</button>
+      <button class="filter-pill" data-filter="couple" id="filter-couple">Couple</button>
       <button class="filter-pill" data-filter="laura">Laura</button>
     </div>
 
@@ -46,6 +46,7 @@
   const noCouple = document.getElementById("no-couple");
   const listEl = document.getElementById("task-list");
   let coupleId = null;
+  let coupleLabel = "Couple";
   let allTasks = [];
   let openTaskId = null;
   let currentFilter = "all";
@@ -57,7 +58,7 @@
   }
 
   function avatar(assignee) {
-    if (assignee === "couple") return `<span class="avatar avatar-blue" style="width:24px;height:24px;font-size:11px;">C</span>`;
+    if (assignee === "couple") return `<span class="avatar avatar-blue" style="width:24px;height:24px;font-size:11px;">${escapeHtml((coupleLabel[0] || "C"))}</span>`;
     return `<span class="avatar avatar-gold" style="width:24px;height:24px;font-size:11px;">L</span>`;
   }
 
@@ -96,7 +97,7 @@
           <input type="text" data-field="description" value="${escapeHtml(t.description || "")}" placeholder="Note (ex. Après la dégustation · Prestataires)" />
           <select data-field="assignee">
             <option value="laura" ${t.assignee === "laura" ? "selected" : ""}>Laura</option>
-            <option value="couple" ${t.assignee === "couple" ? "selected" : ""}>Couple</option>
+            <option value="couple" ${t.assignee === "couple" ? "selected" : ""}>${escapeHtml(coupleLabel)}</option>
           </select>
           <input type="date" data-field="due_date" value="${t.due_date || ""}" />
           <div class="edit-actions">
@@ -176,6 +177,12 @@
 
     appShell.style.display = "flex";
     await renderNav("taches.html");
+
+    const { data: brief } = await supabase.from("briefs").select("couple_nom").eq("id", coupleId).maybeSingle();
+    if (brief?.couple_nom) {
+      coupleLabel = brief.couple_nom;
+      document.getElementById("filter-couple").textContent = coupleLabel;
+    }
 
     await loadTasks();
 
